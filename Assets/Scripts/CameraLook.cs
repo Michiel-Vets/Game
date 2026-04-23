@@ -2,17 +2,26 @@ using UnityEngine;
 
 public class CameraLook : MonoBehaviour
 {
-    [SerializeField] private float mouseSensitivity = 0.10f;
+    [Header("Look Settings")]
+    [SerializeField] private float mouseSensitivity = 0.1f;
     [SerializeField] private float minPitch = -80f;
     [SerializeField] private float maxPitch = 80f;
 
-    private float pitch;
+    private float currentPitch;
 
-    public void ApplyPitch(float mouseY)
+    public void ApplyLook(float mouseY)
     {
-        pitch -= mouseY * mouseSensitivity;
-        pitch = Mathf.Clamp(pitch, minPitch, maxPitch);
+        // Ik kijk omhoog of omlaag met de muis.
+        currentPitch -= mouseY * mouseSensitivity;
+        currentPitch = Mathf.Clamp(currentPitch, minPitch, maxPitch);
 
-        transform.localRotation = Quaternion.Euler(pitch, 0f, 0f);
+        transform.localRotation = Quaternion.Euler(currentPitch, 0f, 0f);
+    }
+
+    public void ResetLook()
+    {
+        // Ik zet mijn verticale camera terug neutraal.
+        currentPitch = 0f;
+        transform.localRotation = Quaternion.identity;
     }
 }
