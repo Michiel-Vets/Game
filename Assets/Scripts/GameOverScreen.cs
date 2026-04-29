@@ -13,61 +13,69 @@ public class GameOverScreen : MonoBehaviour
     private void Awake()
     {
         if (gameOverPanel != null)
-        {
             gameOverPanel.SetActive(false);
-        }
+
+        FindReferencesIfNeeded();
     }
 
     private void OnEnable()
     {
+        FindReferencesIfNeeded();
+
         if (healthController != null)
-        {
             healthController.OnDeath += ShowGameOver;
-        }
     }
 
     private void OnDisable()
     {
         if (healthController != null)
-        {
             healthController.OnDeath -= ShowGameOver;
-        }
+    }
+
+    private void FindReferencesIfNeeded()
+    {
+        GameObject player = GameObject.FindGameObjectWithTag("Player");
+
+        if (player == null)
+            return;
+
+        if (healthController == null)
+            healthController = player.GetComponent<HealthController>();
+
+        if (playerController == null)
+            playerController = player.GetComponent<PlayerController>();
+
+        if (playerInput == null)
+            playerInput = player.GetComponent<PlayerInput>();
     }
 
     private void ShowGameOver()
     {
-        // Ik toon het game over scherm wanneer de speler sterft.
         if (gameOverPanel != null)
-        {
             gameOverPanel.SetActive(true);
-        }
 
         if (playerController != null)
-        {
             playerController.SetControlsEnabled(false);
-        }
 
         if (playerInput != null)
-        {
             playerInput.enabled = false;
-        }
 
         Time.timeScale = 0f;
+
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
     }
 
     public void Restart()
     {
-        // Ik laad de huidige scene opnieuw zodat alles volledig reset.
         Time.timeScale = 1f;
+
         Scene currentScene = SceneManager.GetActiveScene();
         SceneManager.LoadScene(currentScene.buildIndex);
     }
 
     public void Quit()
     {
-        // Ik sluit de game af.
 #if UNITY_EDITOR
         UnityEditor.EditorApplication.isPlaying = false;
 #else

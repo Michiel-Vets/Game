@@ -2,6 +2,7 @@
 using UnityEngine.InputSystem;
 
 [RequireComponent(typeof(Rigidbody))]
+[RequireComponent(typeof(CapsuleCollider))]
 public class PlayerController : MonoBehaviour
 {
     [Header("References")]
@@ -12,34 +13,40 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private float moveSpeed = 5f;
     [SerializeField] private float lookSensitivity = 0.1f;
 
+    [Header("Knockback")]
+    [SerializeField] private float knockbackDecay = 8f;
+
     [Header("Debug Health Input")]
     [SerializeField] private float healthChangePerSecond = 25f;
 
     private Rigidbody rb;
     private Vector2 moveInput;
     private Vector2 lookInput;
+    private Vector3 knockbackVelocity;
     private bool controlsEnabled = true;
 
     private void Awake()
     {
         rb = GetComponent<Rigidbody>();
+
+        rb.useGravity = true;
+        rb.isKinematic = false;
         rb.freezeRotation = true;
+        rb.constraints = RigidbodyConstraints.FreezeRotation;
+        rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
+        rb.interpolation = RigidbodyInterpolation.Interpolate;
     }
 
     private void OnEnable()
     {
         if (healthController != null)
-        {
             healthController.OnDeath += HandleDeath;
-        }
     }
 
     private void OnDisable()
     {
         if (healthController != null)
-        {
             healthController.OnDeath -= HandleDeath;
-        }
     }
 
     private void Start()
@@ -62,6 +69,7 @@ public class PlayerController : MonoBehaviour
 
         HandleRotation();
         HandleMovement();
+        DecayKnockback();
     }
 
     public void OnMove(InputValue value)
@@ -76,8 +84,19 @@ public class PlayerController : MonoBehaviour
         if (!controlsEnabled || cameraLook == null)
             return;
 
-        // Ik kijk links, rechts, omhoog en omlaag.
         cameraLook.ApplyLook(lookInput.y);
+    }
+
+    public void ApplyKnockback(Vector3 direction, float force, float upwardForce)
+    {
+        if (direction.sqrMagnitude < 0.01f)
+            return;
+
+        direction.y = 0f;
+        direction.Normalize();
+
+        knockbackVelocity += direction * force;
+        rb.AddForce(Vector3.up * upwardForce, ForceMode.Impulse);
     }
 
     public void SetControlsEnabled(bool enabled)
@@ -86,15 +105,12 @@ public class PlayerController : MonoBehaviour
 
         if (!enabled)
         {
-            // Ik stop meteen met bewegen wanneer mijn controls uit gaan.
             moveInput = Vector2.zero;
             lookInput = Vector2.zero;
+            knockbackVelocity = Vector3.zero;
 
-            if (rb != null)
-            {
-                rb.linearVelocity = Vector3.zero;
-                rb.angularVelocity = Vector3.zero;
-            }
+            rb.linearVelocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
         }
     }
 
@@ -103,8 +119,14 @@ public class PlayerController : MonoBehaviour
         Vector3 localDirection = new Vector3(moveInput.x, 0f, moveInput.y);
         Vector3 worldDirection = transform.TransformDirection(localDirection);
 
-        Vector3 targetPosition = rb.position + worldDirection * moveSpeed * Time.fixedDeltaTime;
-        rb.MovePosition(targetPosition);
+        Vector3 movementVelocity = worldDirection.normalized * moveSpeed;
+        Vector3 horizontalVelocity = movementVelocity + knockbackVelocity;
+
+        rb.linearVelocity = new Vector3(
+            horizontalVelocity.x,
+            rb.linearVelocity.y,
+            horizontalVelocity.z
+        );
     }
 
     private void HandleRotation()
@@ -114,29 +136,32 @@ public class PlayerController : MonoBehaviour
         rb.MoveRotation(rb.rotation * deltaRotation);
     }
 
+    private void DecayKnockback()
+    {
+        knockbackVelocity = Vector3.Lerp(
+            knockbackVelocity,
+            Vector3.zero,
+            knockbackDecay * Time.fixedDeltaTime
+        );
+    }
+
     private void HandleDebugHealthInput()
     {
         if (healthController == null || !healthController.IsAlive)
             return;
 
-        // Ik gebruik A om schade te nemen en E om te healen tijdens het testen.
-        if (Keyboard.current != null)
-        {
-            if (Keyboard.current.qKey.isPressed)
-            {
-                healthController.TakeDamage(healthChangePerSecond * Time.deltaTime);
-            }
+        if (Keyboard.current == null)
+            return;
 
-            if (Keyboard.current.eKey.isPressed)
-            {
-                healthController.Heal(healthChangePerSecond * Time.deltaTime);
-            }
-        }
+        if (Keyboard.current.qKey.isPressed)
+            healthController.TakeDamage(healthChangePerSecond * Time.deltaTime);
+
+        if (Keyboard.current.eKey.isPressed)
+            healthController.Heal(healthChangePerSecond * Time.deltaTime);
     }
 
     private void HandleDeath()
     {
-        // Ik kan niets meer doen wanneer ik dood ben.
         SetControlsEnabled(false);
         UnlockCursor();
     }

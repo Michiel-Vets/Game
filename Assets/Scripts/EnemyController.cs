@@ -3,156 +3,111 @@ using UnityEngine;
 [RequireComponent(typeof(Rigidbody))]
 public class EnemyController : MonoBehaviour
 {
-    [Header("References")]
-    [SerializeField] private Transform playerTarget;
-    [SerializeField] private HealthController playerHealthController;
-    [SerializeField] private Collider enemyCollider;
-
     [Header("Movement")]
-    [SerializeField] private float moveSpeed = 3f;
+    [SerializeField] private float moveSpeed = 5f;
     [SerializeField] private bool rotateTowardsPlayer = true;
 
-    [Header("Height")]
-    [SerializeField] private bool lockHeightToStartPosition = true;
-    [SerializeField] private float extraHeightOffset = 0f;
+    [Header("Combat")]
+    [SerializeField, Range(0f, 1f)] private float damagePercentage = 0.1f;
 
-    [Header("Damage")]
-    [SerializeField] private float damageAmount = 20f;
+    [Header("Knockback")]
+    [SerializeField] private float knockbackForce = 8f;
+    [SerializeField] private float upwardKnockbackForce = 2f;
 
+    private Transform playerTarget;
     private Rigidbody rb;
-    private bool hasHitPlayer;
-    private float lockedYPosition;
+    private bool hasHit;
 
     private void Awake()
     {
         rb = GetComponent<Rigidbody>();
+
+        rb.useGravity = true;
+        rb.isKinematic = false;
         rb.freezeRotation = true;
-
-        if (enemyCollider == null)
-        {
-            enemyCollider = GetComponent<Collider>();
-        }
-
-        lockedYPosition = transform.position.y + extraHeightOffset;
+        rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
+        rb.interpolation = RigidbodyInterpolation.Interpolate;
     }
 
     private void Start()
     {
-        FindPlayerTarget();
-        FindPlayerHealthController();
-        SnapToLockedHeight();
+        if (playerTarget == null)
+        {
+            GameObject player = GameObject.FindGameObjectWithTag("Player");
+
+            if (player != null)
+                playerTarget = player.transform;
+            else
+                Debug.LogWarning("EnemyController: No player found with tag 'Player'.");
+        }
     }
 
     private void FixedUpdate()
     {
-        if (hasHitPlayer)
-            return;
-
         MoveTowardsPlayer();
     }
 
-    private void FindPlayerTarget()
+    public void SetTarget(Transform target)
     {
-        if (playerTarget != null)
-            return;
-
-        GameObject playerObject = GameObject.FindGameObjectWithTag("Player");
-
-        if (playerObject != null)
-        {
-            playerTarget = playerObject.transform;
-        }
-    }
-
-    private void FindPlayerHealthController()
-    {
-        if (playerHealthController != null)
-            return;
-
-        if (playerTarget == null)
-            FindPlayerTarget();
-
-        if (playerTarget == null)
-            return;
-
-        playerHealthController = playerTarget.GetComponent<HealthController>();
-
-        if (playerHealthController == null)
-            playerHealthController = playerTarget.GetComponentInChildren<HealthController>(true);
-
-        if (playerHealthController == null)
-            playerHealthController = playerTarget.GetComponentInParent<HealthController>();
-    }
-
-    private void SnapToLockedHeight()
-    {
-        if (!lockHeightToStartPosition)
-            return;
-
-        Vector3 correctedPosition = rb.position;
-        correctedPosition.y = lockedYPosition;
-        rb.position = correctedPosition;
+        playerTarget = target;
     }
 
     private void MoveTowardsPlayer()
     {
-        if (playerTarget == null)
+        if (playerTarget == null || hasHit)
             return;
 
-        Vector3 directionToPlayer = playerTarget.position - rb.position;
-        directionToPlayer.y = 0f;
+        Vector3 direction = playerTarget.position - transform.position;
+        direction.y = 0f;
 
-        if (directionToPlayer.sqrMagnitude <= 0.001f)
+        if (direction.sqrMagnitude < 0.01f)
             return;
 
-        Vector3 moveDirection = directionToPlayer.normalized;
-        Vector3 targetPosition = rb.position + moveDirection * moveSpeed * Time.fixedDeltaTime;
+        Vector3 horizontalVelocity = direction.normalized * moveSpeed;
 
-        if (lockHeightToStartPosition)
-        {
-            targetPosition.y = lockedYPosition;
-        }
-
-        rb.MovePosition(targetPosition);
+        rb.linearVelocity = new Vector3(
+            horizontalVelocity.x,
+            rb.linearVelocity.y,
+            horizontalVelocity.z
+        );
 
         if (rotateTowardsPlayer)
         {
-            Quaternion targetRotation = Quaternion.LookRotation(moveDirection);
+            Quaternion targetRotation = Quaternion.LookRotation(direction.normalized);
             rb.MoveRotation(targetRotation);
         }
     }
 
     private void OnCollisionEnter(Collision collision)
     {
-        if (hasHitPlayer)
+        if (hasHit)
             return;
 
-        Transform hitRoot = collision.transform.root;
+        HealthController health = collision.gameObject.GetComponentInParent<HealthController>();
 
-        if (!hitRoot.CompareTag("Player"))
+        if (health == null)
             return;
 
-        hasHitPlayer = true;
+        if (!health.CompareTag("Player"))
+            return;
 
-        HealthController hitHealthController = hitRoot.GetComponent<HealthController>();
+        hasHit = true;
 
-        if (hitHealthController == null)
-            hitHealthController = hitRoot.GetComponentInChildren<HealthController>(true);
+        float damageAmount = health.GetMaxHealth() * damagePercentage;
+        health.TakeDamage(damageAmount);
 
-        if (hitHealthController == null)
-            hitHealthController = hitRoot.GetComponentInParent<HealthController>();
+        PlayerController playerController = health.GetComponent<PlayerController>();
 
-        if (hitHealthController == null && playerHealthController != null)
-            hitHealthController = playerHealthController;
-
-        if (hitHealthController != null && hitHealthController.IsAlive)
+        if (playerController != null)
         {
-            hitHealthController.TakeDamage(damageAmount);
-            Debug.Log("Enemy deed schade aan de speler: " + damageAmount);
-        }
-        else
-        {
-            Debug.LogWarning("EnemyController: geen HealthController gevonden op de Player.");
+            Vector3 knockbackDirection = health.transform.position - transform.position;
+            knockbackDirection.y = 0f;
+
+            playerController.ApplyKnockback(
+                knockbackDirection,
+                knockbackForce,
+                upwardKnockbackForce
+            );
         }
 
         Destroy(gameObject);

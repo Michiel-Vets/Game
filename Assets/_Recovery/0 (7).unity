@@ -1642,11 +1642,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 46090c4c1bfc10842b4a82e5ca67a5cd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HealthController
-  maxHealth: 100
-  currentHealth: 100
-  healthBar: {fileID: 0}
-  fullWidth: 200
-  barHeight: 20
 --- !u!1 &1512172266
 GameObject:
   m_ObjectHideFlags: 0

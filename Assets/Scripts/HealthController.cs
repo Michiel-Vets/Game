@@ -3,9 +3,9 @@ using UnityEngine;
 
 public class HealthController : MonoBehaviour
 {
-    [Header("Health Values")]
+    [Header("Health")]
     [SerializeField] private float maxHealth = 100f;
-    [SerializeField] private float currentHealth = 100f;
+    [SerializeField] private float currentHealth;
 
     [Header("Health Bar")]
     [SerializeField] private RectTransform healthBar;
@@ -19,62 +19,97 @@ public class HealthController : MonoBehaviour
     public event Action OnDeath;
     public event Action<float, float> OnHealthChanged;
 
+    private bool hasDied;
+
     private void Awake()
     {
-        currentHealth = Mathf.Clamp(currentHealth, 0f, maxHealth);
+        maxHealth = Mathf.Max(1f, maxHealth);
+        currentHealth = maxHealth;
 
-        if (healthBar != null)
-        {
-            healthBar.pivot = new Vector2(0f, 0.5f);
-            healthBar.anchorMin = new Vector2(0f, 0.5f);
-            healthBar.anchorMax = new Vector2(0f, 0.5f);
-        }
-
+        SetupHealthBar();
         UpdateHealthVisuals();
     }
 
     public void TakeDamage(float amount)
     {
-        if (!IsAlive || amount <= 0f)
+        if (hasDied || amount <= 0f)
             return;
 
-        // Ik verlies leven wanneer ik schade krijg.
         currentHealth = Mathf.Clamp(currentHealth - amount, 0f, maxHealth);
+
         UpdateHealthVisuals();
 
         if (currentHealth <= 0f)
-        {
-            // Ik ben dood, dus ik stuur een signaal naar andere scripts.
-            OnDeath?.Invoke();
-        }
+            Die();
     }
 
     public void Heal(float amount)
     {
-        if (!IsAlive || amount <= 0f)
+        if (hasDied || amount <= 0f)
             return;
 
-        // Ik krijg leven terug wanneer ik heal.
         currentHealth = Mathf.Clamp(currentHealth + amount, 0f, maxHealth);
         UpdateHealthVisuals();
     }
 
     public void ResetHealth()
     {
-        // Ik reset mijn leven terug naar het maximum.
+        hasDied = false;
         currentHealth = maxHealth;
+
         UpdateHealthVisuals();
+    }
+
+    public float GetMaxHealth()
+    {
+        return maxHealth;
+    }
+
+    public float GetCurrentHealth()
+    {
+        return currentHealth;
+    }
+
+    public float GetHealthPercentage()
+    {
+        return currentHealth / maxHealth;
+    }
+
+    private void Die()
+    {
+        if (hasDied)
+            return;
+
+        hasDied = true;
+        currentHealth = 0f;
+
+        UpdateHealthVisuals();
+
+        Debug.Log("Player died. Game over event triggered.");
+
+        OnDeath?.Invoke();
+    }
+
+    private void SetupHealthBar()
+    {
+        if (healthBar == null)
+            return;
+
+        healthBar.pivot = new Vector2(0f, 0.5f);
+        healthBar.anchorMin = new Vector2(0f, 0.5f);
+        healthBar.anchorMax = new Vector2(0f, 0.5f);
     }
 
     private void UpdateHealthVisuals()
     {
         OnHealthChanged?.Invoke(currentHealth, maxHealth);
 
-        if (healthBar == null || maxHealth <= 0f)
+        if (healthBar == null)
             return;
 
-        float normalizedHealth = currentHealth / maxHealth;
-        float newWidth = normalizedHealth * fullWidth;
+        float healthPercentage = GetHealthPercentage();
+        float newWidth = fullWidth * healthPercentage;
+
         healthBar.sizeDelta = new Vector2(newWidth, barHeight);
     }
 }
