@@ -1,22 +1,10 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 [RequireComponent(typeof(Rigidbody))]
 public class EnemyController : MonoBehaviour
 {
-    private enum LungeState
-    {
-        None,
-        Preparing,
-        Lunging,
-        Exhausted
-    }
-
-    private enum GhostRole
-    {
-        DirectAttacker,
-        Flanker,
-        HighGhost
-    }
+    private enum LungeState { None, Preparing, Lunging, Exhausted }
+    private enum GhostRole { DirectAttacker, Flanker, HighGhost }
 
     [Header("Movement")]
     [SerializeField] private float moveSpeed = 5f;
@@ -97,7 +85,6 @@ public class EnemyController : MonoBehaviour
     private bool hasHit;
     private bool isSprinting;
     private bool isRecharging;
-
     private bool wantsToFlyUp;
     private bool likesClimbingEnemies;
 
@@ -108,14 +95,16 @@ public class EnemyController : MonoBehaviour
     private float flankSide;
     private float flankTimer;
 
+    // Sprint timers
     private float sprintTimer;
     private float rechargeTimer;
     private float chosenSprintDuration;
 
+    // Lunge — timers vervangen door Cooldown waar van toepassing
     private LungeState lungeState = LungeState.None;
     private float lungeTimer;
-    private float lungeCooldownTimer;
-    private float lungeDecisionTimer;
+    private readonly Cooldown lungeCooldownTimer = new Cooldown();
+    private readonly Cooldown lungeDecisionTimer = new Cooldown();
     private Vector3 lungeDirection;
 
     private Vector3 currentMoveDirection;
@@ -123,7 +112,6 @@ public class EnemyController : MonoBehaviour
     private void Awake()
     {
         rb = GetComponent<Rigidbody>();
-
         rb.useGravity = false;
         rb.isKinematic = false;
         rb.freezeRotation = true;
@@ -132,29 +120,21 @@ public class EnemyController : MonoBehaviour
 
         wantsToFlyUp = Random.value <= chanceToFlyUp;
         likesClimbingEnemies = Random.value <= climbOverEnemyChance;
-
         personalExtraFlyHeight = Random.Range(minExtraFlyHeight, maxExtraFlyHeight);
         returnToGroundDistance = Random.Range(minReturnToGroundDistance, maxReturnToGroundDistance);
 
         PickGhostRole();
 
-        lungeCooldownTimer = Random.Range(0f, 8f);
-        lungeDecisionTimer = Random.Range(0f, lungeDecisionInterval);
+        lungeCooldownTimer.ResetRandom(0f, 8f);
+        lungeDecisionTimer.ResetRandom(0f, lungeDecisionInterval);
 
         StartNewSprint();
     }
 
     private void Start()
     {
-        if (playerTarget == null)
-        {
-            GameObject player = GameObject.FindGameObjectWithTag("Player");
-
-            if (player != null)
-                playerTarget = player.transform;
-            else
-                Debug.LogWarning("EnemyController: No player found with tag 'Player'.");
-        }
+        if (playerTarget == null && !PlayerFinder.TryAssignIfNull(ref playerTarget))
+            Debug.LogWarning("EnemyController: No player found with tag 'Player'.");
     }
 
     private void FixedUpdate()
@@ -162,7 +142,10 @@ public class EnemyController : MonoBehaviour
         if (playerTarget == null || hasHit)
             return;
 
-        UpdateLungeCooldown();
+        float dt = Time.fixedDeltaTime;
+
+        lungeCooldownTimer.Tick(dt);
+        lungeDecisionTimer.Tick(dt);
 
         if (UpdateLungeState())
             return;
@@ -177,6 +160,8 @@ public class EnemyController : MonoBehaviour
     {
         playerTarget = target;
     }
+
+    // ── Ghost Role ───────────────────────────────────────────────────────────
 
     private void PickGhostRole()
     {
@@ -206,6 +191,8 @@ public class EnemyController : MonoBehaviour
                 flankSide *= -1f;
         }
     }
+
+    // ── Movement ─────────────────────────────────────────────────────────────
 
     private void MoveGhostAggressively()
     {
@@ -246,29 +233,19 @@ public class EnemyController : MonoBehaviour
             speed *= closeRangeAggressionMultiplier;
 
         Vector3 horizontalVelocity = currentMoveDirection * speed;
-
         float targetY = GetTargetFlyingHeight(distanceToPlayer, directionToPlayerFlat);
         float verticalVelocity = GetSmoothVerticalVelocity(targetY);
 
-        Vector3 targetVelocity = new Vector3(
-            horizontalVelocity.x,
-            verticalVelocity,
-            horizontalVelocity.z
-        );
-
         rb.linearVelocity = Vector3.MoveTowards(
             rb.linearVelocity,
-            targetVelocity,
+            new Vector3(horizontalVelocity.x, verticalVelocity, horizontalVelocity.z),
             acceleration * Time.fixedDeltaTime
         );
     }
 
     private Vector3 GetAttackDirection(Vector3 directionToPlayerFlat, float distanceToPlayer)
     {
-        if (ghostRole != GhostRole.Flanker)
-            return directionToPlayerFlat;
-
-        if (distanceToPlayer <= attackDistance + 0.7f)
+        if (ghostRole != GhostRole.Flanker || distanceToPlayer <= attackDistance + 0.7f)
             return directionToPlayerFlat;
 
         Vector3 sideDirection = Vector3.Cross(Vector3.up, directionToPlayerFlat).normalized * flankSide;
@@ -284,25 +261,20 @@ public class EnemyController : MonoBehaviour
         if (toFlankPoint.sqrMagnitude < 0.01f)
             return directionToPlayerFlat;
 
-        return Vector3.Lerp(
-            directionToPlayerFlat,
-            toFlankPoint.normalized,
-            surroundStrength
-        ).normalized;
+        return Vector3.Lerp(directionToPlayerFlat, toFlankPoint.normalized, surroundStrength).normalized;
     }
+
+    // ── Flying Height ─────────────────────────────────────────────────────────
 
     private float GetTargetFlyingHeight(float distanceToPlayer, Vector3 directionToPlayerFlat)
     {
         float surfaceY = GetSurfaceHeightBelow();
-
         float restHeight = surfaceY + preferredFloatHeight;
         float maxAllowedHeight = surfaceY + maxHeightAboveSurface;
 
         float desiredHeight = restHeight;
 
-        bool mustComeDownToAttack = distanceToPlayer <= returnToGroundDistance;
-
-        if (!mustComeDownToAttack)
+        if (distanceToPlayer > returnToGroundDistance)
         {
             if (wantsToFlyUp)
                 desiredHeight = restHeight + personalExtraFlyHeight;
@@ -313,15 +285,12 @@ public class EnemyController : MonoBehaviour
             if (likesClimbingEnemies)
             {
                 float climbHeight = GetEnemyClimbHeight(directionToPlayerFlat);
-
                 if (climbHeight > desiredHeight)
                     desiredHeight = climbHeight;
             }
         }
 
-        desiredHeight = Mathf.Clamp(desiredHeight, restHeight, maxAllowedHeight);
-
-        return desiredHeight;
+        return Mathf.Clamp(desiredHeight, restHeight, maxAllowedHeight);
     }
 
     private float GetEnemyClimbHeight(Vector3 directionToPlayerFlat)
@@ -332,61 +301,42 @@ public class EnemyController : MonoBehaviour
             Vector3.up * 0.8f;
 
         Collider[] nearbyEnemies = Physics.OverlapSphere(
-            checkCenter,
-            enemyAvoidRadius,
-            enemyLayers,
-            QueryTriggerInteraction.Ignore
-        );
+            checkCenter, enemyAvoidRadius, enemyLayers, QueryTriggerInteraction.Ignore);
 
         float highestEnemyY = float.MinValue;
 
         foreach (Collider enemy in nearbyEnemies)
         {
-            if (enemy.transform == transform)
-                continue;
-
-            if (enemy.attachedRigidbody == rb)
+            if (enemy.transform == transform || enemy.attachedRigidbody == rb)
                 continue;
 
             highestEnemyY = Mathf.Max(highestEnemyY, enemy.bounds.max.y);
         }
 
-        if (highestEnemyY == float.MinValue)
-            return float.MinValue;
-
-        return highestEnemyY + climbOverEnemyHeight;
+        return highestEnemyY == float.MinValue ? float.MinValue : highestEnemyY + climbOverEnemyHeight;
     }
+
+    // ── Lunge ─────────────────────────────────────────────────────────────────
 
     private void TryStartLunge()
     {
-        if (lungeCooldownTimer > 0f)
+        if (!lungeCooldownTimer.IsReady || !lungeDecisionTimer.IsReady)
             return;
 
-        lungeDecisionTimer -= Time.fixedDeltaTime;
+        lungeDecisionTimer.Reset(lungeDecisionInterval);
 
-        if (lungeDecisionTimer > 0f)
+        float distanceToPlayer = Vector3.Distance(playerTarget.position, transform.position);
+
+        if (distanceToPlayer > lungeTriggerDistance || Random.value > lungeChance)
             return;
 
-        lungeDecisionTimer = lungeDecisionInterval;
-
-        Vector3 toPlayer = playerTarget.position - transform.position;
-        float distanceToPlayer = toPlayer.magnitude;
-
-        if (distanceToPlayer > lungeTriggerDistance)
-            return;
-
-        if (Random.value > lungeChance)
-            return;
-
-        lungeDirection = toPlayer.normalized;
-
+        lungeDirection = (playerTarget.position - transform.position).normalized;
         lungeState = LungeState.Preparing;
         lungeTimer = lungePrepareTime;
-        lungeCooldownTimer = lungeCooldown;
+        lungeCooldownTimer.Reset(lungeCooldown);
 
         isSprinting = false;
         isRecharging = false;
-
         rb.linearVelocity = Vector3.zero;
     }
 
@@ -397,198 +347,52 @@ public class EnemyController : MonoBehaviour
 
         lungeTimer -= Time.fixedDeltaTime;
 
-        if (lungeState == LungeState.Preparing)
+        switch (lungeState)
         {
-            MoveVerticallyToRestHeight();
-            rb.linearVelocity = new Vector3(0f, rb.linearVelocity.y, 0f);
+            case LungeState.Preparing:
+                MoveVerticallyToRestHeight();
+                rb.linearVelocity = new Vector3(0f, rb.linearVelocity.y, 0f);
 
-            Vector3 toPlayer = playerTarget.position - transform.position;
+                Vector3 toPlayer = playerTarget.position - transform.position;
+                if (toPlayer.sqrMagnitude > 0.01f)
+                    lungeDirection = toPlayer.normalized;
 
-            if (toPlayer.sqrMagnitude > 0.01f)
-                lungeDirection = toPlayer.normalized;
+                RotateTowardsPlayer(new Vector3(lungeDirection.x, 0f, lungeDirection.z));
 
-            RotateTowardsPlayer(new Vector3(lungeDirection.x, 0f, lungeDirection.z));
+                if (lungeTimer <= 0f)
+                {
+                    lungeState = LungeState.Lunging;
+                    lungeTimer = lungeDuration;
+                }
+                return true;
 
-            if (lungeTimer <= 0f)
-            {
-                lungeState = LungeState.Lunging;
-                lungeTimer = lungeDuration;
-            }
+            case LungeState.Lunging:
+                rb.linearVelocity = lungeDirection * lungeSpeed;
 
-            return true;
-        }
+                if (lungeTimer <= 0f)
+                {
+                    lungeState = LungeState.Exhausted;
+                    lungeTimer = lungeExhaustTime;
+                    rb.linearVelocity = Vector3.zero;
+                }
+                return true;
 
-        if (lungeState == LungeState.Lunging)
-        {
-            rb.linearVelocity = lungeDirection * lungeSpeed;
+            case LungeState.Exhausted:
+                MoveVerticallyToRestHeight();
+                rb.linearVelocity = new Vector3(0f, rb.linearVelocity.y, 0f);
 
-            if (lungeTimer <= 0f)
-            {
-                lungeState = LungeState.Exhausted;
-                lungeTimer = lungeExhaustTime;
-                rb.linearVelocity = Vector3.zero;
-            }
-
-            return true;
-        }
-
-        if (lungeState == LungeState.Exhausted)
-        {
-            MoveVerticallyToRestHeight();
-            rb.linearVelocity = new Vector3(0f, rb.linearVelocity.y, 0f);
-
-            if (lungeTimer <= 0f)
-            {
-                lungeState = LungeState.None;
-                StartNewSprint();
-            }
-
-            return true;
+                if (lungeTimer <= 0f)
+                {
+                    lungeState = LungeState.None;
+                    StartNewSprint();
+                }
+                return true;
         }
 
         return false;
     }
 
-    private void MoveVerticallyToRestHeight()
-    {
-        float surfaceY = GetSurfaceHeightBelow();
-        float restHeight = surfaceY + preferredFloatHeight;
-
-        float verticalVelocity = GetSmoothVerticalVelocity(restHeight);
-
-        rb.linearVelocity = new Vector3(
-            rb.linearVelocity.x,
-            verticalVelocity,
-            rb.linearVelocity.z
-        );
-    }
-
-    private float GetSmoothVerticalVelocity(float targetY)
-    {
-        float heightDifference = targetY - transform.position.y;
-
-        return Mathf.Clamp(
-            heightDifference * verticalSpeed,
-            -verticalSpeed,
-            verticalSpeed
-        );
-    }
-
-    private float GetSurfaceHeightBelow()
-    {
-        Vector3 rayOrigin = transform.position + Vector3.up * 10f;
-
-        if (Physics.Raycast(
-            rayOrigin,
-            Vector3.down,
-            out RaycastHit hit,
-            heightRaycastDistance,
-            floorAndObstacleLayers,
-            QueryTriggerInteraction.Ignore))
-        {
-            return hit.point.y;
-        }
-
-        return 0f;
-    }
-
-    private bool IsObstacleInFront(Vector3 direction)
-    {
-        Vector3 origin = transform.position + Vector3.up * 0.7f;
-
-        return Physics.SphereCast(
-            origin,
-            obstacleCheckRadius,
-            direction,
-            out _,
-            obstacleCheckDistance,
-            obstacleLayers,
-            QueryTriggerInteraction.Ignore
-        );
-    }
-
-    private Vector3 GetEnemyAvoidance()
-    {
-        Collider[] nearbyEnemies = Physics.OverlapSphere(
-            transform.position,
-            enemyAvoidRadius,
-            enemyLayers,
-            QueryTriggerInteraction.Ignore
-        );
-
-        Vector3 avoidance = Vector3.zero;
-
-        foreach (Collider enemy in nearbyEnemies)
-        {
-            if (enemy.transform == transform)
-                continue;
-
-            if (enemy.attachedRigidbody == rb)
-                continue;
-
-            Vector3 away = transform.position - enemy.transform.position;
-            away.y = 0f;
-
-            float distance = away.magnitude;
-
-            if (distance < 0.01f)
-                continue;
-
-            avoidance += away.normalized / distance;
-        }
-
-        return avoidance;
-    }
-
-    private float GetTargetSpeed(float distanceToPlayer)
-    {
-        float distanceSpeedMultiplier = GetDistanceSpeedMultiplier(distanceToPlayer);
-
-        float stateMultiplier = 1f;
-
-        if (isSprinting)
-            stateMultiplier = sprintSpeedMultiplier;
-        else if (isRecharging)
-            stateMultiplier = rechargeSpeedMultiplier;
-
-        return moveSpeed * distanceSpeedMultiplier * stateMultiplier;
-    }
-
-    private float GetDistanceSpeedMultiplier(float distanceToPlayer)
-    {
-        if (distanceToPlayer <= normalSpeedDistance)
-            return 1f;
-
-        float distanceProgress = Mathf.InverseLerp(
-            normalSpeedDistance,
-            maxSpeedDistance,
-            distanceToPlayer
-        );
-
-        return Mathf.Lerp(1f, maxDistanceSpeedMultiplier, distanceProgress);
-    }
-
-    private void RotateTowardsPlayer(Vector3 directionToPlayer)
-    {
-        if (directionToPlayer.sqrMagnitude < 0.01f)
-            return;
-
-        Quaternion targetRotation = Quaternion.LookRotation(directionToPlayer);
-
-        Quaternion smoothRotation = Quaternion.Slerp(
-            rb.rotation,
-            targetRotation,
-            rotationSpeed * Time.fixedDeltaTime
-        );
-
-        rb.MoveRotation(smoothRotation);
-    }
-
-    private void UpdateLungeCooldown()
-    {
-        if (lungeCooldownTimer > 0f)
-            lungeCooldownTimer -= Time.fixedDeltaTime;
-    }
+    // ── Sprint ────────────────────────────────────────────────────────────────
 
     private void UpdateSprintState()
     {
@@ -602,7 +406,6 @@ public class EnemyController : MonoBehaviour
                 isRecharging = true;
                 rechargeTimer = chosenSprintDuration * rechargeMultiplier;
             }
-
             return;
         }
 
@@ -621,11 +424,103 @@ public class EnemyController : MonoBehaviour
     private void StartNewSprint()
     {
         chosenSprintDuration = Random.Range(minSprintDuration, maxSprintDuration);
-
         sprintTimer = chosenSprintDuration;
         isSprinting = true;
         isRecharging = false;
     }
+
+    // ── Speed ─────────────────────────────────────────────────────────────────
+
+    private float GetTargetSpeed(float distanceToPlayer)
+    {
+        float stateMultiplier = isSprinting ? sprintSpeedMultiplier :
+                                isRecharging ? rechargeSpeedMultiplier : 1f;
+
+        return moveSpeed * GetDistanceSpeedMultiplier(distanceToPlayer) * stateMultiplier;
+    }
+
+    private float GetDistanceSpeedMultiplier(float distanceToPlayer)
+    {
+        if (distanceToPlayer <= normalSpeedDistance)
+            return 1f;
+
+        float t = Mathf.InverseLerp(normalSpeedDistance, maxSpeedDistance, distanceToPlayer);
+        return Mathf.Lerp(1f, maxDistanceSpeedMultiplier, t);
+    }
+
+    // ── Physics Helpers ───────────────────────────────────────────────────────
+
+    private void RotateTowardsPlayer(Vector3 directionToPlayer)
+    {
+        if (directionToPlayer.sqrMagnitude < 0.01f)
+            return;
+
+        Quaternion targetRotation = Quaternion.LookRotation(directionToPlayer);
+        rb.MoveRotation(Quaternion.Slerp(rb.rotation, targetRotation, rotationSpeed * Time.fixedDeltaTime));
+    }
+
+    private void MoveVerticallyToRestHeight()
+    {
+        float restHeight = GetSurfaceHeightBelow() + preferredFloatHeight;
+        rb.linearVelocity = new Vector3(
+            rb.linearVelocity.x,
+            GetSmoothVerticalVelocity(restHeight),
+            rb.linearVelocity.z
+        );
+    }
+
+    private float GetSmoothVerticalVelocity(float targetY)
+    {
+        return Mathf.Clamp((targetY - transform.position.y) * verticalSpeed, -verticalSpeed, verticalSpeed);
+    }
+
+    private float GetSurfaceHeightBelow()
+    {
+        Vector3 rayOrigin = transform.position + Vector3.up * 10f;
+
+        return Physics.Raycast(
+            rayOrigin, Vector3.down, out RaycastHit hit,
+            heightRaycastDistance, floorAndObstacleLayers, QueryTriggerInteraction.Ignore)
+            ? hit.point.y
+            : 0f;
+    }
+
+    private bool IsObstacleInFront(Vector3 direction)
+    {
+        Vector3 origin = transform.position + Vector3.up * 0.7f;
+
+        return Physics.SphereCast(
+            origin, obstacleCheckRadius, direction, out _,
+            obstacleCheckDistance, obstacleLayers, QueryTriggerInteraction.Ignore);
+    }
+
+    private Vector3 GetEnemyAvoidance()
+    {
+        Collider[] nearbyEnemies = Physics.OverlapSphere(
+            transform.position, enemyAvoidRadius, enemyLayers, QueryTriggerInteraction.Ignore);
+
+        Vector3 avoidance = Vector3.zero;
+
+        foreach (Collider enemy in nearbyEnemies)
+        {
+            if (enemy.transform == transform || enemy.attachedRigidbody == rb)
+                continue;
+
+            Vector3 away = transform.position - enemy.transform.position;
+            away.y = 0f;
+
+            float distance = away.magnitude;
+
+            if (distance < 0.01f)
+                continue;
+
+            avoidance += away.normalized / distance;
+        }
+
+        return avoidance;
+    }
+
+    // ── Combat ────────────────────────────────────────────────────────────────
 
     private void OnCollisionEnter(Collision collision)
     {
@@ -634,16 +529,12 @@ public class EnemyController : MonoBehaviour
 
         HealthController health = collision.gameObject.GetComponentInParent<HealthController>();
 
-        if (health == null)
-            return;
-
-        if (!health.CompareTag("Player"))
+        if (health == null || !health.CompareTag("Player"))
             return;
 
         hasHit = true;
 
-        float damageAmount = health.GetMaxHealth() * damagePercentage;
-        health.TakeDamage(damageAmount);
+        health.TakeDamage(health.MaxHealth * damagePercentage);
 
         PlayerController playerController = health.GetComponent<PlayerController>();
 
@@ -651,12 +542,7 @@ public class EnemyController : MonoBehaviour
         {
             Vector3 knockbackDirection = health.transform.position - transform.position;
             knockbackDirection.y = 0f;
-
-            playerController.ApplyKnockback(
-                knockbackDirection,
-                knockbackForce,
-                upwardKnockbackForce
-            );
+            playerController.ApplyKnockback(knockbackDirection, knockbackForce, upwardKnockbackForce);
         }
 
         Destroy(gameObject);

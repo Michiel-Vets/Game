@@ -11,7 +11,6 @@ public class EnemySpawner : MonoBehaviour
     [SerializeField] private float startSpawnInterval = 4f;
     [SerializeField] private float minimumSpawnInterval = 0.5f;
     [SerializeField] private float spawnIntervalDecreasePerSecond = 0.03f;
-
     [SerializeField] private int startMaxEnemiesAlive = 5;
     [SerializeField] private int maxEnemyLimit = 50;
     [SerializeField] private float increaseLimitEverySeconds = 10f;
@@ -36,17 +35,15 @@ public class EnemySpawner : MonoBehaviour
 
     private void Start()
     {
-        FindPlayerIfNeeded();
+        PlayerFinder.TryAssignIfNull(ref player);
 
         if (enemyPrefab == null)
-        {
             Debug.LogError("EnemySpawner: Enemy Prefab is not assigned.");
-        }
     }
 
     private void Update()
     {
-        FindPlayerIfNeeded();
+        PlayerFinder.TryAssignIfNull(ref player);
 
         if (enemyPrefab == null || player == null)
             return;
@@ -56,47 +53,31 @@ public class EnemySpawner : MonoBehaviour
         survivedTime += Time.deltaTime;
         spawnTimer += Time.deltaTime;
 
-        float currentSpawnInterval = GetCurrentSpawnInterval();
-
-        if (spawnTimer >= currentSpawnInterval)
+        if (spawnTimer >= GetCurrentSpawnInterval())
         {
             spawnTimer = 0f;
             SpawnEnemies();
         }
     }
 
-    private void FindPlayerIfNeeded()
-    {
-        if (player != null)
-            return;
-
-        GameObject foundPlayer = GameObject.FindGameObjectWithTag("Player");
-
-        if (foundPlayer != null)
-            player = foundPlayer.transform;
-    }
-
     private float GetCurrentSpawnInterval()
     {
-        float interval = startSpawnInterval - survivedTime * spawnIntervalDecreasePerSecond;
-        return Mathf.Max(minimumSpawnInterval, interval);
+        return Mathf.Max(minimumSpawnInterval, startSpawnInterval - survivedTime * spawnIntervalDecreasePerSecond);
     }
 
     private int GetCurrentMaxEnemiesAlive()
     {
         int increases = Mathf.FloorToInt(survivedTime / increaseLimitEverySeconds);
-        int currentLimit = startMaxEnemiesAlive + increases * enemyLimitIncreaseAmount;
-
-        return Mathf.Min(currentLimit, maxEnemyLimit);
+        return Mathf.Min(startMaxEnemiesAlive + increases * enemyLimitIncreaseAmount, maxEnemyLimit);
     }
 
     private void SpawnEnemies()
     {
-        int currentMaxEnemiesAlive = GetCurrentMaxEnemiesAlive();
+        int currentMax = GetCurrentMaxEnemiesAlive();
 
         for (int i = 0; i < enemiesPerSpawn; i++)
         {
-            if (activeEnemies.Count >= currentMaxEnemiesAlive)
+            if (activeEnemies.Count >= currentMax)
                 return;
 
             if (!TryGetSpawnPosition(out Vector3 spawnPosition))
@@ -104,11 +85,8 @@ public class EnemySpawner : MonoBehaviour
 
             GameObject enemy = Instantiate(enemyPrefab, spawnPosition, Quaternion.identity);
 
-            EnemyController enemyController = enemy.GetComponent<EnemyController>();
-            if (enemyController != null)
-            {
-                enemyController.SetTarget(player);
-            }
+            if (enemy.TryGetComponent(out EnemyController controller))
+                controller.SetTarget(player);
 
             activeEnemies.Add(enemy);
         }
@@ -125,14 +103,9 @@ public class EnemySpawner : MonoBehaviour
 
             randomDirection.Normalize();
 
-            float randomDistance = Random.Range(minSpawnDistance, maxSpawnDistance);
+            float distance = Random.Range(minSpawnDistance, maxSpawnDistance);
 
-            Vector3 horizontalOffset = new Vector3(
-                randomDirection.x,
-                0f,
-                randomDirection.y
-            ) * randomDistance;
-
+            Vector3 horizontalOffset = new Vector3(randomDirection.x, 0f, randomDirection.y) * distance;
             Vector3 rayStart = player.position + horizontalOffset + Vector3.up * raycastHeight;
 
             if (Physics.Raycast(rayStart, Vector3.down, out RaycastHit hit, raycastHeight * 2f, groundLayer))

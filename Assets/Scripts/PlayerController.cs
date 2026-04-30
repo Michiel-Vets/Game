@@ -38,7 +38,6 @@ public class PlayerController : MonoBehaviour
     private void Awake()
     {
         rb = GetComponent<Rigidbody>();
-
         rb.useGravity = true;
         rb.isKinematic = false;
         rb.freezeRotation = true;
@@ -85,31 +84,27 @@ public class PlayerController : MonoBehaviour
         DecayKnockback();
     }
 
-    public void OnMove(InputValue value)
-    {
-        moveInput = value.Get<Vector2>();
-    }
+    // ── Input Actions ─────────────────────────────────────────────────────────
+
+    public void OnMove(InputValue value) => moveInput = value.Get<Vector2>();
 
     public void OnLook(InputValue value)
     {
         lookInput = value.Get<Vector2>();
 
-        if (!controlsEnabled || cameraLook == null)
-            return;
-
-        cameraLook.ApplyLook(lookInput.y);
+        if (controlsEnabled && cameraLook != null)
+            cameraLook.ApplyLook(lookInput.y);
     }
 
-    public void OnSprint(InputValue value)
-    {
-        isSprinting = value.isPressed;
-    }
+    public void OnSprint(InputValue value) => isSprinting = value.isPressed;
 
     public void OnJump(InputValue value)
     {
         if (value.isPressed)
             jumpRequested = true;
     }
+
+    // ── Public API ────────────────────────────────────────────────────────────
 
     public void ApplyKnockback(Vector3 direction, float force, float upwardForce)
     {
@@ -134,27 +129,21 @@ public class PlayerController : MonoBehaviour
             knockbackVelocity = Vector3.zero;
             isSprinting = false;
             jumpRequested = false;
-
             rb.linearVelocity = Vector3.zero;
             rb.angularVelocity = Vector3.zero;
         }
     }
 
+    // ── Movement ──────────────────────────────────────────────────────────────
+
     private void HandleMovement()
     {
-        Vector3 localDirection = new Vector3(moveInput.x, 0f, moveInput.y);
-        Vector3 worldDirection = transform.TransformDirection(localDirection);
+        Vector3 worldDirection = transform.TransformDirection(new Vector3(moveInput.x, 0f, moveInput.y));
+        float speed = isSprinting ? sprintSpeed : moveSpeed;
 
-        float currentSpeed = isSprinting ? sprintSpeed : moveSpeed;
+        Vector3 horizontal = worldDirection.normalized * speed + knockbackVelocity;
 
-        Vector3 movementVelocity = worldDirection.normalized * currentSpeed;
-        Vector3 horizontalVelocity = movementVelocity + knockbackVelocity;
-
-        rb.linearVelocity = new Vector3(
-            horizontalVelocity.x,
-            rb.linearVelocity.y,
-            horizontalVelocity.z
-        );
+        rb.linearVelocity = new Vector3(horizontal.x, rb.linearVelocity.y, horizontal.z);
     }
 
     private void HandleJump()
@@ -166,34 +155,25 @@ public class PlayerController : MonoBehaviour
 
         float yVelocity = rb.linearVelocity.y;
 
-        // Alleen springen als je NIET valt en NIET te snel stijgt
         if (yVelocity < minJumpVelocity || yVelocity > maxJumpVelocity)
             return;
 
-        rb.linearVelocity = new Vector3(
-            rb.linearVelocity.x,
-            0f,
-            rb.linearVelocity.z
-        );
-
+        rb.linearVelocity = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);
         rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
     }
 
     private void HandleRotation()
     {
         float yaw = lookInput.x * lookSensitivity;
-        Quaternion deltaRotation = Quaternion.Euler(0f, yaw, 0f);
-        rb.MoveRotation(rb.rotation * deltaRotation);
+        rb.MoveRotation(rb.rotation * Quaternion.Euler(0f, yaw, 0f));
     }
 
     private void DecayKnockback()
     {
-        knockbackVelocity = Vector3.Lerp(
-            knockbackVelocity,
-            Vector3.zero,
-            knockbackDecay * Time.fixedDeltaTime
-        );
+        knockbackVelocity = Vector3.Lerp(knockbackVelocity, Vector3.zero, knockbackDecay * Time.fixedDeltaTime);
     }
+
+    // ── Keyboard Fallbacks ────────────────────────────────────────────────────
 
     private void HandleSprintKeyboardFallback()
     {
@@ -205,27 +185,25 @@ public class PlayerController : MonoBehaviour
 
     private void HandleJumpKeyboardFallback()
     {
-        if (Keyboard.current == null)
-            return;
-
-        if (Keyboard.current.spaceKey.wasPressedThisFrame)
+        if (Keyboard.current != null && Keyboard.current.spaceKey.wasPressedThisFrame)
             jumpRequested = true;
     }
 
     private void HandleDebugHealthInput()
     {
-        if (healthController == null || !healthController.IsAlive)
+        if (healthController == null || !healthController.IsAlive || Keyboard.current == null)
             return;
 
-        if (Keyboard.current == null)
-            return;
+        float delta = healthChangePerSecond * Time.deltaTime;
 
         if (Keyboard.current.qKey.isPressed)
-            healthController.TakeDamage(healthChangePerSecond * Time.deltaTime);
+            healthController.TakeDamage(delta);
 
         if (Keyboard.current.eKey.isPressed)
-            healthController.Heal(healthChangePerSecond * Time.deltaTime);
+            healthController.Heal(delta);
     }
+
+    // ── Death & Cursor ────────────────────────────────────────────────────────
 
     private void HandleDeath()
     {

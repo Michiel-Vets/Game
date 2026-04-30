@@ -15,6 +15,7 @@ public class HealthController : MonoBehaviour
     public float MaxHealth => maxHealth;
     public float CurrentHealth => currentHealth;
     public bool IsAlive => currentHealth > 0f;
+    public float HealthPercentage => currentHealth / maxHealth;
 
     public event Action OnDeath;
     public event Action<float, float> OnHealthChanged;
@@ -36,7 +37,6 @@ public class HealthController : MonoBehaviour
             return;
 
         currentHealth = Mathf.Clamp(currentHealth - amount, 0f, maxHealth);
-
         UpdateHealthVisuals();
 
         if (currentHealth <= 0f)
@@ -56,23 +56,7 @@ public class HealthController : MonoBehaviour
     {
         hasDied = false;
         currentHealth = maxHealth;
-
         UpdateHealthVisuals();
-    }
-
-    public float GetMaxHealth()
-    {
-        return maxHealth;
-    }
-
-    public float GetCurrentHealth()
-    {
-        return currentHealth;
-    }
-
-    public float GetHealthPercentage()
-    {
-        return currentHealth / maxHealth;
     }
 
     private void Die()
@@ -82,11 +66,9 @@ public class HealthController : MonoBehaviour
 
         hasDied = true;
         currentHealth = 0f;
-
         UpdateHealthVisuals();
 
         Debug.Log("Player died. Game over event triggered.");
-
         OnDeath?.Invoke();
     }
 
@@ -107,9 +89,6 @@ public class HealthController : MonoBehaviour
         if (healthBar == null)
             return;
 
-        float healthPercentage = GetHealthPercentage();
-        float newWidth = fullWidth * healthPercentage;
-
-        healthBar.sizeDelta = new Vector2(newWidth, barHeight);
+        healthBar.sizeDelta = new Vector2(fullWidth * HealthPercentage, barHeight);
     }
 }

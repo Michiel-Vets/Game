@@ -143,10 +143,20 @@ MonoBehaviour:
   verticalSpeed: 3.5
   heightRaycastDistance: 30
   heightFollowDistance: 12
+  chanceToFlyUp: 0.35
+  minReturnToGroundDistance: 2.5
+  maxReturnToGroundDistance: 7
+  minExtraFlyHeight: 1
+  maxExtraFlyHeight: 4
+  flankChance: 0.45
+  flankDistance: 4
+  flankSwitchInterval: 4
+  surroundStrength: 1.2
+  climbOverEnemyChance: 0.35
   climbOverEnemyHeight: 2.2
   climbCheckDistance: 3
   lungeTriggerDistance: 5
-  lungeChance: 0.1
+  lungeChance: 0.057
   lungePrepareTime: 2
   lungeSpeed: 22
   lungeDuration: 0.45

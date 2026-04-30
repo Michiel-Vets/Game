@@ -34,7 +34,7 @@ public class GameOverScreen : MonoBehaviour
 
     private void FindReferencesIfNeeded()
     {
-        GameObject player = GameObject.FindGameObjectWithTag("Player");
+        GameObject player = PlayerFinder.FindPlayerObject();
 
         if (player == null)
             return;
@@ -61,7 +61,6 @@ public class GameOverScreen : MonoBehaviour
             playerInput.enabled = false;
 
         Time.timeScale = 0f;
-
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
     }
@@ -69,9 +68,7 @@ public class GameOverScreen : MonoBehaviour
     public void Restart()
     {
         Time.timeScale = 1f;
-
-        Scene currentScene = SceneManager.GetActiveScene();
-        SceneManager.LoadScene(currentScene.buildIndex);
+        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
     }
 
     public void Quit()
