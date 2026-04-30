@@ -14,9 +14,9 @@ GameObject:
   - component: {fileID: 7813691904567466451}
   - component: {fileID: 5373964574242872775}
   - component: {fileID: 6467528723785307569}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: Enemy
-  m_TagString: Player
+  m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -133,10 +133,50 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: '::'
   moveSpeed: 3
-  rotateTowardsPlayer: 1
+  acceleration: 12
+  rotationSpeed: 8
+  floorAndObstacleLayers:
+    serializedVersion: 2
+    m_Bits: 1152
+  maxHeightAboveSurface: 5
+  preferredFloatHeight: 1.6
+  verticalSpeed: 3.5
+  heightRaycastDistance: 30
+  heightFollowDistance: 12
+  climbOverEnemyHeight: 2.2
+  climbCheckDistance: 3
+  lungeTriggerDistance: 5
+  lungeChance: 0.1
+  lungePrepareTime: 2
+  lungeSpeed: 22
+  lungeDuration: 0.45
+  lungeExhaustTime: 5
+  lungeCooldown: 45
+  lungeDecisionInterval: 1
+  attackDistance: 2.2
+  closeRangeAggressionMultiplier: 1.35
+  playerFocusStrength: 2.2
+  obstacleLayers:
+    serializedVersion: 2
+    m_Bits: 1024
+  enemyLayers:
+    serializedVersion: 2
+    m_Bits: 512
+  obstacleCheckDistance: 3
+  obstacleCheckRadius: 0.45
+  enemyAvoidRadius: 1.8
+  enemyAvoidStrength: 1.4
+  normalSpeedDistance: 15
+  maxSpeedDistance: 50
+  maxDistanceSpeedMultiplier: 2
+  sprintSpeedMultiplier: 1.5
+  rechargeSpeedMultiplier: 0.5
+  minSprintDuration: 1
+  maxSprintDuration: 5
+  rechargeMultiplier: 1.5
   damagePercentage: 0.1
-  knockbackForce: 8
-  upwardKnockbackForce: 2
+  knockbackForce: 12
+  upwardKnockbackForce: 4
 --- !u!136 &6467528723785307569
 CapsuleCollider:
   m_ObjectHideFlags: 0

@@ -11,7 +11,13 @@ public class PlayerController : MonoBehaviour
 
     [Header("Movement")]
     [SerializeField] private float moveSpeed = 5f;
+    [SerializeField] private float sprintSpeed = 9f;
     [SerializeField] private float lookSensitivity = 0.1f;
+
+    [Header("Jumping")]
+    [SerializeField] private float jumpForce = 7f;
+    [SerializeField] private float minJumpVelocity = -0.1f;
+    [SerializeField] private float maxJumpVelocity = 0.5f;
 
     [Header("Knockback")]
     [SerializeField] private float knockbackDecay = 8f;
@@ -20,10 +26,14 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private float healthChangePerSecond = 25f;
 
     private Rigidbody rb;
+
     private Vector2 moveInput;
     private Vector2 lookInput;
     private Vector3 knockbackVelocity;
+
     private bool controlsEnabled = true;
+    private bool isSprinting;
+    private bool jumpRequested;
 
     private void Awake()
     {
@@ -59,6 +69,8 @@ public class PlayerController : MonoBehaviour
         if (!controlsEnabled)
             return;
 
+        HandleSprintKeyboardFallback();
+        HandleJumpKeyboardFallback();
         HandleDebugHealthInput();
     }
 
@@ -69,6 +81,7 @@ public class PlayerController : MonoBehaviour
 
         HandleRotation();
         HandleMovement();
+        HandleJump();
         DecayKnockback();
     }
 
@@ -85,6 +98,17 @@ public class PlayerController : MonoBehaviour
             return;
 
         cameraLook.ApplyLook(lookInput.y);
+    }
+
+    public void OnSprint(InputValue value)
+    {
+        isSprinting = value.isPressed;
+    }
+
+    public void OnJump(InputValue value)
+    {
+        if (value.isPressed)
+            jumpRequested = true;
     }
 
     public void ApplyKnockback(Vector3 direction, float force, float upwardForce)
@@ -108,6 +132,8 @@ public class PlayerController : MonoBehaviour
             moveInput = Vector2.zero;
             lookInput = Vector2.zero;
             knockbackVelocity = Vector3.zero;
+            isSprinting = false;
+            jumpRequested = false;
 
             rb.linearVelocity = Vector3.zero;
             rb.angularVelocity = Vector3.zero;
@@ -119,7 +145,9 @@ public class PlayerController : MonoBehaviour
         Vector3 localDirection = new Vector3(moveInput.x, 0f, moveInput.y);
         Vector3 worldDirection = transform.TransformDirection(localDirection);
 
-        Vector3 movementVelocity = worldDirection.normalized * moveSpeed;
+        float currentSpeed = isSprinting ? sprintSpeed : moveSpeed;
+
+        Vector3 movementVelocity = worldDirection.normalized * currentSpeed;
         Vector3 horizontalVelocity = movementVelocity + knockbackVelocity;
 
         rb.linearVelocity = new Vector3(
@@ -127,6 +155,28 @@ public class PlayerController : MonoBehaviour
             rb.linearVelocity.y,
             horizontalVelocity.z
         );
+    }
+
+    private void HandleJump()
+    {
+        if (!jumpRequested)
+            return;
+
+        jumpRequested = false;
+
+        float yVelocity = rb.linearVelocity.y;
+
+        // Alleen springen als je NIET valt en NIET te snel stijgt
+        if (yVelocity < minJumpVelocity || yVelocity > maxJumpVelocity)
+            return;
+
+        rb.linearVelocity = new Vector3(
+            rb.linearVelocity.x,
+            0f,
+            rb.linearVelocity.z
+        );
+
+        rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
     }
 
     private void HandleRotation()
@@ -143,6 +193,23 @@ public class PlayerController : MonoBehaviour
             Vector3.zero,
             knockbackDecay * Time.fixedDeltaTime
         );
+    }
+
+    private void HandleSprintKeyboardFallback()
+    {
+        if (Keyboard.current == null)
+            return;
+
+        isSprinting = Keyboard.current.leftShiftKey.isPressed || Keyboard.current.rightShiftKey.isPressed;
+    }
+
+    private void HandleJumpKeyboardFallback()
+    {
+        if (Keyboard.current == null)
+            return;
+
+        if (Keyboard.current.spaceKey.wasPressedThisFrame)
+            jumpRequested = true;
     }
 
     private void HandleDebugHealthInput()
