@@ -132,9 +132,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: dae0ebf2b3f1628449de4794f8420c4d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: '::'
-  moveSpeed: 3
+  moveSpeed: 5
   chaseSpeedMultiplier: 1.5
-  wanderSpeed: 1.8
   acceleration: 12
   rotationSpeed: 8
   groundLayers:
@@ -144,19 +143,29 @@ MonoBehaviour:
   maxFloatHeight: 5
   verticalSpeed: 3.5
   heightRaycastDistance: 30
-  detectionRadius: 25
-  lostRadius: 35
+  chanceToFlyHigh: 0.35
+  minExtraFlyHeight: 1
+  maxExtraFlyHeight: 7
+  heightFollowDistance: 12
+  climbOverEnemyChance: 0.35
+  climbOverEnemyHeight: 2.2
+  climbCheckDistance: 3
   boostStartDistance: 15
   boostMaxDistance: 50
-  maxBoostMultiplier: 2
-  flankChance: 0.45
+  maxBoostMultiplier: 4
+  flankChance: 0.69
   flankDuration: 12
   flankOrbitRadius: 5
   flankOrbitSpeed: 1.2
+  flankSideFlipInterval: 4
   visibilityDotThreshold: 0.5
   interceptDistance: 20
+  minInterceptDistance: 10
+  interceptChance: 0.12
   interceptLookAhead: 1.2
-  lungeTriggerDistance: 6
+  interceptMinDuration: 1.5
+  interceptMaxDuration: 3
+  lungeTriggerDistance: 5
   lungeChance: 0.111
   lungePrepareTime: 2
   lungeSpeed: 22
@@ -167,7 +176,7 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 512
   separationRadius: 2.5
-  separationStrength: 3
+  separationStrength: 5
   obstacleLayers:
     serializedVersion: 2
     m_Bits: 1024
@@ -176,9 +185,11 @@ MonoBehaviour:
   avoidanceStrength: 4
   boundaryLookAhead: 3
   boundaryStrength: 6
-  flockRadius: 18
-  flockStrength: 2
-  flockMinGroupSize: 2
+  heightChangeInterval: 3
+  heightChangeIntervalVariance: 2
+  minWanderHeight: 1
+  maxWanderHeight: 6
+  chaseHeightVariance: 2
   fatigueStartTime: 30
   fatigueDuration: 10
   fatigueMinMultiplier: 0.7
@@ -188,6 +199,21 @@ MonoBehaviour:
   damagePercentage: 0.1
   knockbackForce: 12
   upwardKnockbackForce: 4
+  fleeSpeed: 8
+  fleeDuration: 2.5
+  weakenedSpeed: 2
+  weakenedDuration: 6
+  weakenedRetreatDistance: 12
+  flashlightKillTime: 2
+  dissolveSpeed: 1.5
+  crowdCheckInterval: 0.7
+  crowdSpreadRadius: 8
+  maxNearbyAttackersBeforeSpread: 5
+  crowdSpreadChance: 0.65
+  crowdSpreadMinDuration: 4
+  crowdSpreadMaxDuration: 8
+  crowdSurroundRadius: 7
+  crowdAngleJitter: 35
 --- !u!136 &6467528723785307569
 CapsuleCollider:
   m_ObjectHideFlags: 0

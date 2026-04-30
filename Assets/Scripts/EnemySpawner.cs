@@ -19,9 +19,11 @@ public class EnemySpawner : MonoBehaviour
     [Header("Spawn Amount")]
     [SerializeField] private int enemiesPerSpawn = 1;
 
-    [Header("Spawn Distance")]
-    [SerializeField] private float minSpawnDistance = 12f;
-    [SerializeField] private float maxSpawnDistance = 18f;
+    [Header("Map Edge Detection")]
+    [SerializeField] private float edgeScanRadius = 60f;
+    [SerializeField] private float edgeScanStep = 5f;
+    [SerializeField] private float edgeInsetDistance = 1f;
+    [SerializeField] private int edgeSampleAngles = 36;
 
     [Header("Ground Detection")]
     [SerializeField] private LayerMask groundLayer;
@@ -29,6 +31,7 @@ public class EnemySpawner : MonoBehaviour
     [SerializeField] private float spawnYOffset = 1f;
 
     private readonly List<GameObject> activeEnemies = new List<GameObject>();
+    private readonly List<Vector3> edgePoints = new List<Vector3>();
 
     private float survivedTime;
     private float spawnTimer;
@@ -39,6 +42,8 @@ public class EnemySpawner : MonoBehaviour
 
         if (enemyPrefab == null)
             Debug.LogError("EnemySpawner: Enemy Prefab is not assigned.");
+
+        BakeEdgePoints();
     }
 
     private void Update()
@@ -58,6 +63,55 @@ public class EnemySpawner : MonoBehaviour
             spawnTimer = 0f;
             SpawnEnemies();
         }
+    }
+
+    // Bake a list of ground-edge positions once at startup.
+    // Strategy: for each angle, march outward from the map center
+    // until the ground disappears, then step back one unit.
+    private void BakeEdgePoints()
+    {
+        edgePoints.Clear();
+
+        Vector3 center = transform.position;
+
+        for (int i = 0; i < edgeSampleAngles; i++)
+        {
+            float angle = i * (360f / edgeSampleAngles);
+            Vector3 dir = Quaternion.Euler(0f, angle, 0f) * Vector3.forward;
+
+            Vector3 lastValidPoint = Vector3.zero;
+            bool foundAny = false;
+
+            for (float dist = edgeScanStep; dist <= edgeScanRadius; dist += edgeScanStep)
+            {
+                Vector3 sample = center + dir * dist;
+                Vector3 rayOrigin = sample + Vector3.up * raycastHeight;
+
+                if (Physics.Raycast(rayOrigin, Vector3.down, out RaycastHit hit,
+                    raycastHeight * 2f, groundLayer, QueryTriggerInteraction.Ignore))
+                {
+                    lastValidPoint = hit.point;
+                    foundAny = true;
+                }
+                else
+                {
+                    // Ground ended — step back slightly to stay on the edge
+                    if (foundAny)
+                    {
+                        Vector3 edgePoint = lastValidPoint - dir * edgeInsetDistance;
+                        edgePoints.Add(edgePoint + Vector3.up * spawnYOffset);
+                    }
+                    break;
+                }
+            }
+
+            // If ground went all the way to the scan radius, use the last valid point
+            if (foundAny && edgePoints.Count == i)
+                edgePoints.Add(lastValidPoint + Vector3.up * spawnYOffset);
+        }
+
+        if (edgePoints.Count == 0)
+            Debug.LogWarning("EnemySpawner: No edge points found. Check groundLayer and edgeScanRadius.");
     }
 
     private float GetCurrentSpawnInterval()
@@ -80,7 +134,7 @@ public class EnemySpawner : MonoBehaviour
             if (activeEnemies.Count >= currentMax)
                 return;
 
-            if (!TryGetSpawnPosition(out Vector3 spawnPosition))
+            if (!TryGetEdgeSpawnPosition(out Vector3 spawnPosition))
                 return;
 
             GameObject enemy = Instantiate(enemyPrefab, spawnPosition, Quaternion.identity);
@@ -92,31 +146,34 @@ public class EnemySpawner : MonoBehaviour
         }
     }
 
-    private bool TryGetSpawnPosition(out Vector3 spawnPosition)
+    private bool TryGetEdgeSpawnPosition(out Vector3 spawnPosition)
     {
-        for (int attempt = 0; attempt < 10; attempt++)
+        if (edgePoints.Count == 0)
         {
-            Vector2 randomDirection = Random.insideUnitCircle;
+            spawnPosition = Vector3.zero;
+            return false;
+        }
 
-            if (randomDirection.sqrMagnitude < 0.01f)
-                randomDirection = Vector2.right;
+        // Try a few random edge points, pick one furthest from the player
+        // so enemies don't spawn directly on top of the player
+        int tries = Mathf.Min(5, edgePoints.Count);
+        Vector3 best = edgePoints[Random.Range(0, edgePoints.Count)];
+        float bestDist = Vector3.Distance(best, player.position);
 
-            randomDirection.Normalize();
+        for (int i = 1; i < tries; i++)
+        {
+            Vector3 candidate = edgePoints[Random.Range(0, edgePoints.Count)];
+            float dist = Vector3.Distance(candidate, player.position);
 
-            float distance = Random.Range(minSpawnDistance, maxSpawnDistance);
-
-            Vector3 horizontalOffset = new Vector3(randomDirection.x, 0f, randomDirection.y) * distance;
-            Vector3 rayStart = player.position + horizontalOffset + Vector3.up * raycastHeight;
-
-            if (Physics.Raycast(rayStart, Vector3.down, out RaycastHit hit, raycastHeight * 2f, groundLayer))
+            if (dist > bestDist)
             {
-                spawnPosition = hit.point + Vector3.up * spawnYOffset;
-                return true;
+                best = candidate;
+                bestDist = dist;
             }
         }
 
-        spawnPosition = Vector3.zero;
-        return false;
+        spawnPosition = best;
+        return true;
     }
 
     private void CleanupDestroyedEnemies()
@@ -126,5 +183,12 @@ public class EnemySpawner : MonoBehaviour
             if (activeEnemies[i] == null)
                 activeEnemies.RemoveAt(i);
         }
+    }
+
+    private void OnDrawGizmosSelected()
+    {
+        Gizmos.color = Color.red;
+        foreach (Vector3 p in edgePoints)
+            Gizmos.DrawSphere(p, 0.4f);
     }
 }
