@@ -84,8 +84,6 @@ public class PlayerController : MonoBehaviour
         DecayKnockback();
     }
 
-    // ── Input Actions ─────────────────────────────────────────────────────────
-
     public void OnMove(InputValue value) => moveInput = value.Get<Vector2>();
 
     public void OnLook(InputValue value)
@@ -93,7 +91,7 @@ public class PlayerController : MonoBehaviour
         lookInput = value.Get<Vector2>();
 
         if (controlsEnabled && cameraLook != null)
-            cameraLook.ApplyLook(lookInput.y);
+            cameraLook.ApplyLook(lookInput.y * lookSensitivity);
     }
 
     public void OnSprint(InputValue value) => isSprinting = value.isPressed;
@@ -103,8 +101,6 @@ public class PlayerController : MonoBehaviour
         if (value.isPressed)
             jumpRequested = true;
     }
-
-    // ── Public API ────────────────────────────────────────────────────────────
 
     public void ApplyKnockback(Vector3 direction, float force, float upwardForce)
     {
@@ -133,8 +129,6 @@ public class PlayerController : MonoBehaviour
             rb.angularVelocity = Vector3.zero;
         }
     }
-
-    // ── Movement ──────────────────────────────────────────────────────────────
 
     private void HandleMovement()
     {
@@ -173,8 +167,6 @@ public class PlayerController : MonoBehaviour
         knockbackVelocity = Vector3.Lerp(knockbackVelocity, Vector3.zero, knockbackDecay * Time.fixedDeltaTime);
     }
 
-    // ── Keyboard Fallbacks ────────────────────────────────────────────────────
-
     private void HandleSprintKeyboardFallback()
     {
         if (Keyboard.current == null)
@@ -203,8 +195,6 @@ public class PlayerController : MonoBehaviour
             healthController.Heal(delta);
     }
 
-    // ── Death & Cursor ────────────────────────────────────────────────────────
-
     private void HandleDeath()
     {
         SetControlsEnabled(false);
@@ -222,4 +212,4 @@ public class PlayerController : MonoBehaviour
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
     }
-} //test
+}

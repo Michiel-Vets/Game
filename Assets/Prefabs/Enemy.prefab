@@ -133,57 +133,58 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: '::'
   moveSpeed: 3
+  chaseSpeedMultiplier: 1.5
+  wanderSpeed: 1.8
   acceleration: 12
   rotationSpeed: 8
-  floorAndObstacleLayers:
+  groundLayers:
     serializedVersion: 2
-    m_Bits: 1152
-  maxHeightAboveSurface: 5
+    m_Bits: 128
   preferredFloatHeight: 1.6
+  maxFloatHeight: 5
   verticalSpeed: 3.5
   heightRaycastDistance: 30
-  heightFollowDistance: 12
-  chanceToFlyUp: 0.35
-  minReturnToGroundDistance: 2.5
-  maxReturnToGroundDistance: 7
-  minExtraFlyHeight: 1
-  maxExtraFlyHeight: 4
+  detectionRadius: 25
+  lostRadius: 35
+  boostStartDistance: 15
+  boostMaxDistance: 50
+  maxBoostMultiplier: 2
   flankChance: 0.45
-  flankDistance: 4
-  flankSwitchInterval: 4
-  surroundStrength: 1.2
-  climbOverEnemyChance: 0.35
-  climbOverEnemyHeight: 2.2
-  climbCheckDistance: 3
-  lungeTriggerDistance: 5
-  lungeChance: 0.057
+  flankDuration: 12
+  flankOrbitRadius: 5
+  flankOrbitSpeed: 1.2
+  visibilityDotThreshold: 0.5
+  interceptDistance: 20
+  interceptLookAhead: 1.2
+  lungeTriggerDistance: 6
+  lungeChance: 0.111
   lungePrepareTime: 2
   lungeSpeed: 22
   lungeDuration: 0.45
   lungeExhaustTime: 5
   lungeCooldown: 45
-  lungeDecisionInterval: 1
-  attackDistance: 2.2
-  closeRangeAggressionMultiplier: 1.35
-  playerFocusStrength: 2.2
-  obstacleLayers:
-    serializedVersion: 2
-    m_Bits: 1024
   enemyLayers:
     serializedVersion: 2
     m_Bits: 512
-  obstacleCheckDistance: 3
-  obstacleCheckRadius: 0.45
-  enemyAvoidRadius: 1.8
-  enemyAvoidStrength: 1.4
-  normalSpeedDistance: 15
-  maxSpeedDistance: 50
-  maxDistanceSpeedMultiplier: 2
-  sprintSpeedMultiplier: 1.5
-  rechargeSpeedMultiplier: 0.5
-  minSprintDuration: 1
-  maxSprintDuration: 5
-  rechargeMultiplier: 1.5
+  separationRadius: 2.5
+  separationStrength: 3
+  obstacleLayers:
+    serializedVersion: 2
+    m_Bits: 1024
+  avoidanceDistance: 4
+  avoidanceRadius: 0.5
+  avoidanceStrength: 4
+  boundaryLookAhead: 3
+  boundaryStrength: 6
+  flockRadius: 18
+  flockStrength: 2
+  flockMinGroupSize: 2
+  fatigueStartTime: 30
+  fatigueDuration: 10
+  fatigueMinMultiplier: 0.7
+  recoilForce: 6
+  recoilDuration: 0.35
+  attackDistance: 2.2
   damagePercentage: 0.1
   knockbackForce: 12
   upwardKnockbackForce: 4

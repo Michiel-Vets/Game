@@ -3,7 +3,6 @@ using UnityEngine;
 public class CameraLook : MonoBehaviour
 {
     [Header("Look Settings")]
-    [SerializeField] private float mouseSensitivity = 0.1f;
     [SerializeField] private float minPitch = -80f;
     [SerializeField] private float maxPitch = 80f;
 
@@ -11,7 +10,7 @@ public class CameraLook : MonoBehaviour
 
     public void ApplyLook(float mouseY)
     {
-        currentPitch = Mathf.Clamp(currentPitch - mouseY * mouseSensitivity, minPitch, maxPitch);
+        currentPitch = Mathf.Clamp(currentPitch - mouseY, minPitch, maxPitch);
         transform.localRotation = Quaternion.Euler(currentPitch, 0f, 0f);
     }
 
