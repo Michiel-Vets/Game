@@ -203,21 +203,19 @@ public class PlayerController : MonoBehaviour
             healthController.Heal(delta);
     }
 
+    /// <summary>
+    /// Called when the player dies. GameOverScreen owns disabling controls and stopping time.
+    /// This method only handles what is strictly PlayerController's own responsibility.
+    /// </summary>
     private void HandleDeath()
     {
-        SetControlsEnabled(false);
-        UnlockCursor();
+        // Input is killed by GameOverScreen. Nothing extra needed here.
+        // Hook kept so future per-controller death VFX/animation can be added.
     }
 
     private void LockCursor()
     {
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
-    }
-
-    private void UnlockCursor()
-    {
-        Cursor.lockState = CursorLockMode.None;
-        Cursor.visible = true;
     }
 }

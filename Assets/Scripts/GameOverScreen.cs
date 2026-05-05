@@ -49,14 +49,21 @@ public class GameOverScreen : MonoBehaviour
             playerInput = player.GetComponent<PlayerInput>();
     }
 
+    /// <summary>
+    /// Single source of truth for death consequences:
+    /// shows the panel, disables all player input, stops time, unlocks cursor.
+    /// PlayerController.HandleDeath() no longer does any of this.
+    /// </summary>
     private void ShowGameOver()
     {
         if (gameOverPanel != null)
             gameOverPanel.SetActive(true);
 
+        // Disable movement and look controls
         if (playerController != null)
             playerController.SetControlsEnabled(false);
 
+        // Disable the Unity Input System component entirely
         if (playerInput != null)
             playerInput.enabled = false;
 

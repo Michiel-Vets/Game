@@ -18,7 +18,6 @@ public class HealthController : MonoBehaviour
     public float HealthPercentage => currentHealth / maxHealth;
 
     public event Action OnDeath;
-    public event Action<float, float> OnHealthChanged;
 
     private bool hasDied;
 
@@ -84,8 +83,6 @@ public class HealthController : MonoBehaviour
 
     private void UpdateHealthVisuals()
     {
-        OnHealthChanged?.Invoke(currentHealth, maxHealth);
-
         if (healthBar == null)
             return;
 

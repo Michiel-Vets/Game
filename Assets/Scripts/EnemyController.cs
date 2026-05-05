@@ -14,7 +14,7 @@ public class EnemyController : MonoBehaviour
         Intercept,
         Lunge,
         Recoil,
-        Weakened,   // spotted by flashlight but light moved away — retreats slowly
+        Weakened,   // spotted by flashlight — retreats and heals when clear
         Fleeing,    // just dealt damage — races away before vanishing
         Dying,      // flashlight held on it for killTime — dissolves then destroys
     }
@@ -123,6 +123,22 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private float recoilForce = 6f;
     [SerializeField] private float recoilDuration = 0.35f;
 
+    [Header("Death Animation")]
+    [Tooltip("Hoe snel de enemy omhoog schiet bij het begin van de dood-animatie.")]
+    [SerializeField] private float deathLaunchSpeed = 16f;
+    [Tooltip("Hoe snel de enemy ronddraait tijdens de dood-animatie (graden per seconde).")]
+    [SerializeField] private float deathSpinSpeed = 360f;
+    [Tooltip("Hoe lang de omhoog-fase duurt voordat de enemy destroyed wordt (seconden).")]
+    [SerializeField] private float deathRiseDuration = 1.8f;
+
+    [Header("Weakened Shrink & Fall")]
+    [Tooltip("Minimale schaalfractie tijdens weakened (0.3 = krimpt tot 30% van origineel).")]
+    [SerializeField, Range(0.1f, 0.9f)] private float weakenedMinScaleFraction = 0.3f;
+    [Tooltip("Doelhoogte boven de grond bij maximale flashlight schade (bijna op de grond).")]
+    [SerializeField] private float weakenedMinFloatHeight = 0.15f;
+    [Tooltip("Hoe snel de enemy daalt richting de grond als hij beschadigd is (m/s schaalfactor).")]
+    [SerializeField] private float weakenedFallSpeed = 6f;
+
     [Header("Combat")]
     [SerializeField] private float attackDistance = 2.2f;
     [SerializeField, Range(0f, 1f)] private float damagePercentage = 0.1f;
@@ -140,10 +156,10 @@ public class EnemyController : MonoBehaviour
     [Header("Flashlight / Health")]
     [Tooltip("Seconden om de enemy van vol naar dood te belichten.")]
     [SerializeField] private float flashlightKillTime = 2f;
-    [Tooltip("Seconden voordat de enemy volledig herstelt als hij niet belicht wordt en ver genoeg is.")]
+    [Tooltip("Seconden voordat de enemy volledig herstelt als hij niet belicht wordt.")]
     [SerializeField] private float healTime = 5f;
-    [Tooltip("Minimale afstand tot de speler voordat de enemy begint te herstellen.")]
-    [SerializeField] private float healMinDistance = 30f;
+    [Tooltip("Hersteltijd-multiplier als de enemy gedeeltelijk beschadigd is maar niet weakened (trager herstel).")]
+    [SerializeField] private float partialHealTimeMultiplier = 2.5f;
     [Tooltip("Snelheid waarmee de scale verandert (zichtbaar krimpen/groeien).")]
     [SerializeField] private float scaleChangeSpeed = 2f;
 
@@ -156,14 +172,14 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private float aggressionRampDuration = 180f;
 
     [Tooltip("Move speed multiplier at minimum aggression.")]
-    [SerializeField] private float speedMultiplierMin = 1.0f;
+    [SerializeField] private float speedMultiplierMin = 0.6f;
     [Tooltip("Move speed multiplier at maximum aggression.")]
-    [SerializeField] private float speedMultiplierMax = 1.6f;
+    [SerializeField] private float speedMultiplierMax = 2.0f;
 
     [Tooltip("Damage multiplier at minimum aggression.")]
-    [SerializeField] private float damageMultiplierMin = 0.5f;
+    [SerializeField] private float damageMultiplierMin = 0.3f;
     [Tooltip("Damage multiplier at maximum aggression.")]
-    [SerializeField] private float damageMultiplierMax = 2.0f;
+    [SerializeField] private float damageMultiplierMax = 2.5f;
 
     [Tooltip("Lunge trigger distance multiplier at minimum aggression.")]
     [SerializeField] private float lungeDistanceMultiplierMin = 0.7f;
@@ -175,6 +191,16 @@ public class EnemyController : MonoBehaviour
     [Tooltip("Lunge speed multiplier at maximum aggression.")]
     [SerializeField] private float lungeSpeedMultiplierMax = 1.4f;
 
+    [Tooltip("Schaalfactor bij minimale agressie (groter = meer HP, maar trager).")]
+    [SerializeField] private float scaleAtMinAggression = 1.5f;
+    [Tooltip("Schaalfactor bij maximale agressie (kleiner = minder HP, maar sneller).")]
+    [SerializeField] private float scaleAtMaxAggression = 0.8f;
+
+    [Tooltip("Flashlight kill time multiplier bij minimale agressie (meer HP = langer om te doden).")]
+    [SerializeField] private float hpMultiplierMin = 2.0f;
+    [Tooltip("Flashlight kill time multiplier bij maximale agressie (minder HP = sneller dood).")]
+    [SerializeField] private float hpMultiplierMax = 0.5f;
+
     [Header("Crowd Spreading / Surround")]
     [SerializeField] private float crowdCheckInterval = 0.7f;
     [SerializeField] private float crowdSpreadRadius = 8f;
@@ -185,6 +211,37 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private float crowdSurroundRadius = 7f;
     [SerializeField] private float crowdAngleJitter = 35f;
 
+    [Header("Anticipation Scaling (gameTimeSurvived)")]
+    [Tooltip("Tijd (sec) waarna intercept kans op max zit.")]
+    [SerializeField] private float anticipationRampDuration = 120f;
+    [Tooltip("Intercept kans bij t=0.")]
+    [SerializeField, Range(0f, 1f)] private float interceptChanceMin = 0.05f;
+    [Tooltip("Intercept kans bij maximale anticipatie.")]
+    [SerializeField, Range(0f, 1f)] private float interceptChanceMax = 0.45f;
+    [Tooltip("Lookahead multiplier bij t=0 (hoe ver vooruit de intercept mikt).")]
+    [SerializeField] private float interceptLookAheadMin = 0.3f;
+    [Tooltip("Lookahead multiplier bij maximale anticipatie.")]
+    [SerializeField] private float interceptLookAheadMax = 1.2f;
+    [Tooltip("Lunge cooldown reductie bij maximale anticipatie (0 = geen reductie, 0.8 = 80% korter).")]
+    [SerializeField, Range(0f, 0.9f)] private float maxLungeCooldownReduction = 0.6f;
+
+    [Header("Sprint")]
+    [Tooltip("Snelheidsmultiplier tijdens een sprint burst.")]
+    [SerializeField] private float sprintSpeedMultiplier = 1.8f;
+    [Tooltip("Maximale sprint-energie (seconden op volle sprint).")]
+    [SerializeField] private float maxSprintStamina = 3f;
+    [Tooltip("Hoe snel stamina zich oplaadt als de enemy niet sprint (seconden per seconde).")]
+    [SerializeField] private float staminaRechargeRate = 1f;
+    [Tooltip("Hoe snel stamina verbruikt wordt tijdens het sprinten (seconden per seconde).")]
+    [SerializeField] private float staminaDrainRate = 1f;
+    [Tooltip("Snelheidsmultiplier als stamina volledig leeg is (uitgeput).")]
+    [SerializeField] private float exhaustedSpeedMultiplier = 0.55f;
+    [Tooltip("Minimale stamina die hersteld moet zijn voordat een nieuwe sprint kan starten.")]
+    [SerializeField] private float staminaRecoverThreshold = 0.5f;
+    [Tooltip("Afstand tot de speler waaronder een charge-sprint wordt geactiveerd tijdens Chase/Intercept.")]
+    [SerializeField] private float chargeSprintDistance = 12f;
+    [Tooltip("Kans per transitie dat een flank-sprint wordt geactiveerd.")]
+    [SerializeField, Range(0f, 1f)] private float flankSprintChance = 0.6f;
 
     // ────────────────────────────────────────────────────────────────────────────
     // Runtime state
@@ -226,15 +283,31 @@ public class EnemyController : MonoBehaviour
     private float heightTimer;
 
     // Flashlight / Health (0 = vol leven, 1 = dood)
-    private float flashlightDamage = 0f;   // 0..1, groeit bij belichting, krimpt bij herstel
+    private float flashlightDamage = 0f;
     private bool isInFlashlightBeam;
+    private bool wasInFlashlightBeamLastFrame; // used for first-frame recoil detection
     private Vector3 originalScale;
+
+    // Death animation
+    private float deathTimer;
 
     // Flee direction (set when ghost touches player)
     private Vector3 fleeDirection;
 
-    // Injected by EnemySpawner — used to scale aggression on spawn
+    // Crowd spreading
+    private float crowdCheckTimer;
+
+    // Injected by EnemySpawner — used to scale anticipation and cooldowns
     private float gameTimeSurvived;
+
+    // Anticipation values computed from gameTimeSurvived
+    private float effectiveInterceptChance;
+    private float effectiveInterceptLookAhead;
+
+    // Sprint / stamina
+    private float sprintStamina;        // current stamina, 0..maxSprintStamina
+    private bool isSprinting;           // is the enemy actively sprinting this frame
+    private bool isExhausted;           // stamina hit zero — must recover before next sprint
 
     // ────────────────────────────────────────────────────────────────────────────
     // Unity lifecycle
@@ -256,7 +329,6 @@ public class EnemyController : MonoBehaviour
         personalExtraFlyHeight = Random.Range(minExtraFlyHeight, maxExtraFlyHeight);
         likesClimbingEnemies = Random.value <= climbOverEnemyChance;
         returnToGroundDistance = Random.Range(2.5f, 7f);
-        // Base aggression is random, but clamped — actual scaling applied in InitStats() after SetSurvivedTime
         aggressionBias = Random.value;
 
         flankSide = Random.value < 0.5f ? 1f : -1f;
@@ -267,6 +339,14 @@ public class EnemyController : MonoBehaviour
         currentTargetHeight = Random.Range(minWanderHeight, maxWanderHeight);
         heightTimer = Random.Range(0f, heightChangeInterval);
         originalScale = transform.localScale;
+
+        crowdCheckTimer = crowdCheckInterval * Random.Range(0.5f, 1.5f);
+
+        sprintStamina = maxSprintStamina;
+
+        // Default anticipation values (overridden by SetSurvivedTime if called)
+        effectiveInterceptChance = interceptChanceMin;
+        effectiveInterceptLookAhead = interceptLookAheadMin;
     }
 
     private void Start()
@@ -306,8 +386,11 @@ public class EnemyController : MonoBehaviour
         }
 
         UpdateState(dt);
+        UpdateSprint(dt);
         ApplyMovement(dt);
 
+        // Track beam state for next frame (used for first-hit recoil)
+        wasInFlashlightBeamLastFrame = isInFlashlightBeam;
         // Reset beam flag — flashlight must re-confirm every frame
         isInFlashlightBeam = false;
     }
@@ -319,48 +402,69 @@ public class EnemyController : MonoBehaviour
 
     /// <summary>
     /// Called by EnemySpawner right after instantiation.
-    /// The longer the game has been running, the higher the minimum aggression floor.
-    /// All thresholds and multipliers are configurable in the Inspector.
+    /// Scales aggression AND anticipation (intercept quality, lunge cooldown) based on survival time.
     /// </summary>
     public void SetSurvivedTime(float survivedTime)
     {
         gameTimeSurvived = survivedTime;
 
-        // Aggression floor interpolates from aggressionAtStart → aggressionAtEnd over aggressionRampDuration
-        float t = aggressionRampDuration > 0f
+        // ── Aggression floor ──
+        float aggrT = aggressionRampDuration > 0f
             ? Mathf.Clamp01(survivedTime / aggressionRampDuration)
             : 1f;
-        float aggressionFloor = Mathf.Lerp(aggressionAtStart, aggressionAtEnd, t);
-
-        // Random personality bias is kept if it's already more aggressive than the floor
+        float aggressionFloor = Mathf.Lerp(aggressionAtStart, aggressionAtEnd, aggrT);
         aggressionBias = Mathf.Max(aggressionBias, aggressionFloor);
 
-        ApplyAggressionStats();
+        // ── Anticipation ──
+        float antT = anticipationRampDuration > 0f
+            ? Mathf.Clamp01(survivedTime / anticipationRampDuration)
+            : 1f;
+        effectiveInterceptChance = Mathf.Lerp(interceptChanceMin, interceptChanceMax, antT);
+        effectiveInterceptLookAhead = Mathf.Lerp(interceptLookAheadMin, interceptLookAheadMax, antT);
+
+        ApplyAggressionStats(antT);
     }
 
     /// <summary>
-    /// Scales move speed, damage and lunge range based on aggressionBias.
-    /// All multiplier ranges are configurable in the Inspector.
+    /// Scales move speed, damage, lunge range, lunge cooldown, body scale and effective HP
+    /// based on aggressionBias. High aggression = fast, small, fragile, high damage.
+    /// Low aggression = slow, large, tanky, low damage.
     /// Called once after aggressionBias is finalised.
     /// </summary>
-    private void ApplyAggressionStats()
+    private void ApplyAggressionStats(float antT = 0f)
     {
         moveSpeed *= Mathf.Lerp(speedMultiplierMin, speedMultiplierMax, aggressionBias);
         damagePercentage *= Mathf.Lerp(damageMultiplierMin, damageMultiplierMax, aggressionBias);
         lungeTriggerDistance *= Mathf.Lerp(lungeDistanceMultiplierMin, lungeDistanceMultiplierMax, aggressionBias);
         lungeSpeed *= Mathf.Lerp(lungeSpeedMultiplierMin, lungeSpeedMultiplierMax, aggressionBias);
+
+        // HP: aggressive = fragile (short kill time), timid = tanky (long kill time)
+        flashlightKillTime *= Mathf.Lerp(hpMultiplierMin, hpMultiplierMax, aggressionBias);
+        flashlightKillTime = Mathf.Max(0.3f, flashlightKillTime);
+
+        // Body scale: aggressive = small (0.8×), timid = large (1.5×)
+        float scaleFactor = Mathf.Lerp(scaleAtMinAggression, scaleAtMaxAggression, aggressionBias);
+        originalScale = transform.localScale * scaleFactor;
+        transform.localScale = originalScale;
+
+        // Lategame enemies have shorter lunge cooldowns
+        float cooldownReduction = maxLungeCooldownReduction * antT;
+        lungeCooldownTimer.Reset(lungeCooldown * (1f - cooldownReduction));
     }
 
     public void TakeRecoil(Vector3 hitDirection)
     {
+        if (state == BehaviourState.Dying || state == BehaviourState.Fleeing)
+            return;
+
         recoilDir = new Vector3(-hitDirection.x, 0f, -hitDirection.z).normalized;
         recoilTimer = recoilDuration;
         state = BehaviourState.Recoil;
     }
 
     /// <summary>
-    /// Called every frame by the Flashlight script while its beam hits this ghost.
-    /// The flashlight should do a Physics.SphereCast / raycast and call this on hit.
+    /// Called every frame by FlashlightController while its beam hits this enemy.
+    /// On the first frame of contact a small recoil is applied.
     /// </summary>
     public void ReceiveFlashlightHit()
     {
@@ -368,13 +472,25 @@ public class EnemyController : MonoBehaviour
             return;
 
         isInFlashlightBeam = true;
+
+        // First frame of contact: apply a soft recoil push away from the player
+        if (!wasInFlashlightBeamLastFrame && playerTarget != null)
+        {
+            Vector3 hitDir = (transform.position - playerTarget.position).normalized;
+            TakeRecoil(hitDir);
+        }
     }
 
     // ────────────────────────────────────────────────────────────────────────────
     // Flashlight / Health systeem
     // flashlightDamage loopt van 0 (vol) tot 1 (dood).
     // Scale = originalScale * (1 - flashlightDamage), zodat de enemy zichtbaar krimpt.
-    // Als de enemy niet belicht wordt en ver genoeg is herstelt hij langzaam.
+    //
+    // Herstelgedrag:
+    //  - Weakened (zaklamp gezien): herstelt direct zodra de beam weg is,
+    //    maar trager (partialHealTimeMultiplier), en vlucht weg van de speler.
+    //    Geen minimumafstand meer vereist.
+    //  - Volledig hersteld → terug naar aanval.
     // ────────────────────────────────────────────────────────────────────────────
     private void UpdateFlashlightExposure(float dt)
     {
@@ -387,8 +503,8 @@ public class EnemyController : MonoBehaviour
             flashlightDamage += dt / flashlightKillTime;
             flashlightDamage = Mathf.Clamp01(flashlightDamage);
 
-            // Weakened state zetten zodra de enemy belicht wordt
-            if (state != BehaviourState.Weakened)
+            // Ga naar Weakened zodra de beam raakt (recoil is al gezet in ReceiveFlashlightHit)
+            if (state != BehaviourState.Weakened && state != BehaviourState.Recoil)
                 EnterWeakened();
 
             // Dood bij vol schade
@@ -397,18 +513,22 @@ public class EnemyController : MonoBehaviour
         }
         else
         {
-            // Niet belicht: herstel als de enemy ver genoeg van de speler is
-            if (state == BehaviourState.Weakened && flashlightDamage > 0f && playerTarget != null)
+            // Niet belicht en heeft schade: herstel direct (geen afstandseis),
+            // maar trager dan normaal. De enemy blijft in Weakened-state en vlucht
+            // dus automatisch weg van de speler zolang hij niet volledig hersteld is.
+            if (state == BehaviourState.Weakened && flashlightDamage > 0f)
             {
-                float dist = Vector3.Distance(transform.position, playerTarget.position);
-                if (dist >= healMinDistance)
-                {
-                    flashlightDamage -= dt / healTime;
-                    flashlightDamage = Mathf.Max(0f, flashlightDamage);
+                float healRate = healTime * partialHealTimeMultiplier;
+                flashlightDamage -= dt / healRate;
+                flashlightDamage = Mathf.Max(0f, flashlightDamage);
 
-                    // Volledig hersteld: terug naar aanval
-                    if (flashlightDamage <= 0f)
-                        TransitionToAttack(dist);
+                // Volledig hersteld: terug naar aanval
+                if (flashlightDamage <= 0f)
+                {
+                    float dist = playerTarget != null
+                        ? Vector3.Distance(transform.position, playerTarget.position)
+                        : 0f;
+                    TransitionToAttack(dist);
                 }
             }
         }
@@ -419,8 +539,14 @@ public class EnemyController : MonoBehaviour
 
     private void ApplyDamageScale()
     {
-        float healthFraction = 1f - flashlightDamage;
-        Vector3 targetScale = originalScale * healthFraction;
+        // During dying the death animation controls scale — don't interfere
+        if (state == BehaviourState.Dying)
+            return;
+
+        // Weakened: krimpt van originalScale naar weakenedMinScaleFraction * originalScale
+        // afhankelijk van hoeveel flashlightDamage er is.
+        float scaleFraction = Mathf.Lerp(1f, weakenedMinScaleFraction, flashlightDamage);
+        Vector3 targetScale = originalScale * scaleFraction;
         transform.localScale = Vector3.MoveTowards(
             transform.localScale, targetScale, scaleChangeSpeed * Time.fixedDeltaTime);
     }
@@ -434,7 +560,93 @@ public class EnemyController : MonoBehaviour
     private void BeginDying()
     {
         state = BehaviourState.Dying;
+        deathTimer = deathRiseDuration;
         rb.linearVelocity = Vector3.zero;
+    }
+
+    // ────────────────────────────────────────────────────────────────────────────
+    // Sprint / stamina systeem
+    //
+    // Twee situaties triggeren een sprint:
+    //  1. Charge: tijdens Chase/Intercept, als de enemy dicht genoeg is (chargeSprintDistance).
+    //     Geeft een korte versnelling vlak voor de aanval/lunge.
+    //  2. Flank-sprint: bij het begin van een Flank-state, met kans flankSprintChance.
+    //     Geeft de enemy een burst terwijl hij positie inneemt.
+    //
+    // Stamina: 0..maxSprintStamina.
+    //  - Sprinten kost staminaDrainRate per seconde.
+    //  - Op 0: isExhausted = true, enemy beweegt op exhaustedSpeedMultiplier.
+    //  - Herstelt met staminaRechargeRate per seconde als niet gesprongen wordt.
+    //  - Nieuwe sprint pas mogelijk als stamina >= staminaRecoverThreshold.
+    // ────────────────────────────────────────────────────────────────────────────
+    private void UpdateSprint(float dt)
+    {
+        // Sprinten is niet mogelijk in deze states
+        if (state == BehaviourState.Inactive ||
+            state == BehaviourState.Dying ||
+            state == BehaviourState.Fleeing ||
+            state == BehaviourState.Weakened ||
+            state == BehaviourState.Recoil ||
+            state == BehaviourState.Lunge)
+        {
+            isSprinting = false;
+            // Stamina recharges even in non-sprint states (e.g. while flanking without sprint)
+            RechargeStamina(dt);
+            return;
+        }
+
+        bool wantsToSprint = false;
+
+        if (!isExhausted)
+        {
+            if ((state == BehaviourState.Chase || state == BehaviourState.Intercept) && playerTarget != null)
+            {
+                float dist = Vector3.Distance(transform.position, playerTarget.position);
+                wantsToSprint = dist <= chargeSprintDistance;
+            }
+            else if (state == BehaviourState.Flank)
+            {
+                // Flank-sprint: beslissing wordt gezet bij het begin van Flank via BeginFlankSprint
+                wantsToSprint = isSprinting; // houd sprint vast als hij al liep
+            }
+        }
+
+        if (wantsToSprint && sprintStamina > 0f)
+        {
+            isSprinting = true;
+            sprintStamina -= staminaDrainRate * dt;
+
+            if (sprintStamina <= 0f)
+            {
+                sprintStamina = 0f;
+                isExhausted = true;
+                isSprinting = false;
+            }
+        }
+        else
+        {
+            isSprinting = false;
+            RechargeStamina(dt);
+        }
+    }
+
+    private void RechargeStamina(float dt)
+    {
+        if (sprintStamina < maxSprintStamina)
+        {
+            sprintStamina = Mathf.Min(sprintStamina + staminaRechargeRate * dt, maxSprintStamina);
+            if (isExhausted && sprintStamina >= staminaRecoverThreshold)
+                isExhausted = false;
+        }
+    }
+
+    /// <summary>
+    /// Called when transitioning into Flank so a random sprint burst can be started immediately.
+    /// </summary>
+    private void TryBeginFlankSprint()
+    {
+        if (!isExhausted && sprintStamina >= staminaRecoverThreshold && Random.value <= flankSprintChance)
+            isSprinting = true;
     }
 
     private void BeginFleeing(Vector3 fromPosition)
@@ -455,10 +667,18 @@ public class EnemyController : MonoBehaviour
     {
         float distToPlayer = Vector3.Distance(transform.position, playerTarget.position);
 
-        // ── Dying: scale krimpt via ApplyDamageScale, destroy als klein genoeg ──
+        // ── Dying: schiet omhoog, draait rond, destroyed na deathRiseDuration ──
         if (state == BehaviourState.Dying)
         {
-            if (transform.localScale.sqrMagnitude < 0.001f)
+            deathTimer -= dt;
+
+            // Omhoog schieten
+            rb.linearVelocity = new Vector3(0f, deathLaunchSpeed, 0f);
+
+            // Ronddraaien op de Y-as
+            transform.rotation *= Quaternion.Euler(0f, deathSpinSpeed * dt, 0f);
+
+            if (deathTimer <= 0f)
                 Destroy(gameObject);
             return;
         }
@@ -472,7 +692,7 @@ public class EnemyController : MonoBehaviour
             return;
         }
 
-        // ── Weakened: vluchten — herstel en state change gebeurt in UpdateFlashlightExposure ──
+        // ── Weakened: herstel en state change in UpdateFlashlightExposure ──
         if (state == BehaviourState.Weakened)
             return;
 
@@ -480,7 +700,13 @@ public class EnemyController : MonoBehaviour
         {
             recoilTimer -= dt;
             if (recoilTimer <= 0f)
-                TransitionToAttack(distToPlayer);
+            {
+                // After recoil from flashlight: enter weakened so enemy flees
+                if (isInFlashlightBeam || flashlightDamage > 0f)
+                    EnterWeakened();
+                else
+                    TransitionToAttack(distToPlayer);
+            }
             return;
         }
 
@@ -496,6 +722,14 @@ public class EnemyController : MonoBehaviour
         {
             UpdateLunge(dt, distToPlayer);
             return;
+        }
+
+        // ── Crowd spreading check ──
+        crowdCheckTimer -= dt;
+        if (crowdCheckTimer <= 0f)
+        {
+            crowdCheckTimer = crowdCheckInterval;
+            CheckCrowdSpread(distToPlayer);
         }
 
         // Personality-scaled lunge thresholds
@@ -534,10 +768,44 @@ public class EnemyController : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Checks if too many enemies are clustered near the player.
+    /// If so, this enemy switches to Flank to spread out and surround from a different angle.
+    /// Uses the formationSlot to ensure each enemy picks a distinct orbit angle.
+    /// </summary>
+    private void CheckCrowdSpread(float distToPlayer)
+    {
+        // Only spread when actively chasing — not when flanking or intercepting
+        if (state != BehaviourState.Chase)
+            return;
+
+        Collider[] nearby = Physics.OverlapSphere(
+            playerTarget.position, crowdSpreadRadius, enemyLayers, QueryTriggerInteraction.Ignore);
+
+        if (nearby.Length < maxNearbyAttackersBeforeSpread)
+            return;
+
+        if (Random.value > crowdSpreadChance)
+            return;
+
+        // Pick a surround angle based on this enemy's formation slot + jitter
+        float baseAngle = formationSlot * (360f / 8f);
+        flankAngle = baseAngle + Random.Range(-crowdAngleJitter, crowdAngleJitter);
+
+        // Temporarily use the crowd surround radius instead of the normal flank orbit radius
+        // by injecting the target via flankAngle — the flank orbit will use flankOrbitRadius,
+        // so we scale it here to match crowdSurroundRadius by adjusting the flankAngle target point.
+        // (For full flexibility, a dedicated orbit radius override can be added; this is a clean approximation.)
+        state = BehaviourState.Flank;
+        stateTimer = Random.Range(crowdSpreadMinDuration, crowdSpreadMaxDuration);
+        TryBeginFlankSprint();
+    }
+
     private void TransitionToAttack(float distToPlayer)
     {
         bool canIntercept = distToPlayer >= minInterceptDistance && distToPlayer <= interceptDistance;
-        bool choosesIntercept = canIntercept && Random.value <= interceptChance;
+        // Use anticipation-scaled intercept chance instead of the raw inspector value
+        bool choosesIntercept = canIntercept && Random.value <= effectiveInterceptChance;
 
         if (choosesIntercept)
         {
@@ -548,6 +816,7 @@ public class EnemyController : MonoBehaviour
         {
             state = BehaviourState.Flank;
             stateTimer = flankDuration + Random.Range(-3f, 3f);
+            TryBeginFlankSprint();
         }
         else
         {
@@ -602,7 +871,6 @@ public class EnemyController : MonoBehaviour
         bool playerLooking = VisibilityChecker.IsTransformVisibleToCamera(
             transform, playerCamera, visibilityDotThreshold);
 
-        // Flip direction on a timer; accelerate the flip when the player looks at it
         flankSideTimer -= playerLooking ? dt * 2f : dt;
         if (flankSideTimer <= 0f)
         {
@@ -688,6 +956,10 @@ public class EnemyController : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Intercept direction uses effectiveInterceptLookAhead, which scales with gameTimeSurvived.
+    /// Older enemies anticipate further ahead.
+    /// </summary>
     private Vector3 GetInterceptDirection(Vector3 toPlayerFlat, float distToPlayer)
     {
         Rigidbody playerRb = playerTarget.GetComponent<Rigidbody>();
@@ -697,7 +969,7 @@ public class EnemyController : MonoBehaviour
 
         float timeToReach = distToPlayer / Mathf.Max(moveSpeed * chaseSpeedMultiplier, 0.1f);
         Vector3 toIntercept = playerTarget.position
-            + playerVel * timeToReach * interceptLookAhead
+            + playerVel * timeToReach * effectiveInterceptLookAhead   // <── scaled by anticipation
             - transform.position;
         toIntercept.y = 0f;
         return toIntercept.sqrMagnitude > 0.01f ? toIntercept.normalized : toPlayerFlat;
@@ -714,16 +986,13 @@ public class EnemyController : MonoBehaviour
     }
 
     /// <summary>
-    /// Weakened ghost keeps its distance: retreats if too close, drifts sideways otherwise.
+    /// Weakened enemy always retreats from the player.
+    /// It heals while retreating — no minimum distance needed anymore.
+    /// Once fully healed it transitions back to attack via UpdateFlashlightExposure.
     /// </summary>
     private Vector3 GetWeakenedDirection(Vector3 toPlayerFlat, float distToPlayer)
     {
-        // Altijd wegvluchten van de speler tot de herstelafstand bereikt is
-        if (distToPlayer < weakenedRetreatDistance)
-            return -toPlayerFlat;
-
-        // Ver genoeg: stilstaan zodat herstel kan beginnen
-        return Vector3.zero;
+        return -toPlayerFlat;
     }
 
     // ────────────────────────────────────────────────────────────────────────────
@@ -804,7 +1073,15 @@ public class EnemyController : MonoBehaviour
         if (state == BehaviourState.Fleeing) return fleeSpeed;
 
         float baseSpeed = moveSpeed * chaseSpeedMultiplier;
-        return baseSpeed * GetDistanceBoost(distToPlayer) * GetFatigueMultiplier();
+        float speed = baseSpeed * GetDistanceBoost(distToPlayer) * GetFatigueMultiplier();
+
+        // Sprint modifier: boost when sprinting, penalty when exhausted
+        if (isSprinting)
+            speed *= sprintSpeedMultiplier;
+        else if (isExhausted)
+            speed *= exhaustedSpeedMultiplier;
+
+        return speed;
     }
 
     private float GetDistanceBoost(float distToPlayer)
@@ -823,11 +1100,22 @@ public class EnemyController : MonoBehaviour
 
     private float GetVerticalVelocity()
     {
+        // Dying: movement is fully handled in UpdateState, return 0 here
+        if (state == BehaviourState.Dying)
+            return 0f;
+
         float distToPlayer = Vector3.Distance(transform.position, playerTarget.position);
         float targetY = GetTargetFlyingHeight(distToPlayer);
         float diff = targetY - transform.position.y;
 
-        // Use the faster lift speed when clearing an obstacle, normal vertical speed otherwise
+        // Weakened/flashlight: use weakenedFallSpeed downward, normal speed upward
+        // so the enemy falls quickly but can't rise back up while damaged
+        if (state == BehaviourState.Weakened || isInFlashlightBeam)
+        {
+            float fallSpeed = diff < 0f ? weakenedFallSpeed : verticalSpeed * 0.3f;
+            return Mathf.Clamp(diff * fallSpeed, -weakenedFallSpeed, verticalSpeed * 0.3f);
+        }
+
         float speed = IsObstacleAhead() ? obstacleLiftSpeed : verticalSpeed;
         return Mathf.Clamp(diff * speed, -verticalSpeed, speed);
     }
@@ -837,6 +1125,14 @@ public class EnemyController : MonoBehaviour
         float surfaceY = GetSurfaceY();
         float restHeight = surfaceY + preferredFloatHeight;
         float maxHeight = surfaceY + maxFloatHeight;
+
+        // Weakened / flashlight: target height sinks toward the ground based on damage.
+        // At flashlightDamage=0: normal restHeight. At flashlightDamage=1: weakenedMinFloatHeight above surface.
+        if (state == BehaviourState.Weakened || isInFlashlightBeam)
+        {
+            float weakenedTarget = Mathf.Lerp(restHeight, surfaceY + weakenedMinFloatHeight, flashlightDamage);
+            return weakenedTarget;
+        }
 
         float desiredHeight = surfaceY + currentTargetHeight
             + (wantsToFlyHigh ? personalExtraFlyHeight : 0f);
@@ -852,7 +1148,6 @@ public class EnemyController : MonoBehaviour
             if (climbHeight > desiredHeight) desiredHeight = climbHeight;
         }
 
-        // Fly over any obstacle directly ahead
         float clearanceHeight = GetObstacleClearHeight();
         if (clearanceHeight > desiredHeight)
             desiredHeight = clearanceHeight;
@@ -860,13 +1155,8 @@ public class EnemyController : MonoBehaviour
         return Mathf.Clamp(desiredHeight, restHeight, maxHeight);
     }
 
-    /// <summary>
-    /// Scans ahead in the movement direction for obstacles and returns the Y the
-    /// enemy must reach to clear the top of the obstacle, or float.MinValue if clear.
-    /// </summary>
     private float GetObstacleClearHeight()
     {
-        // Use current horizontal velocity as the look-ahead direction; fall back to facing direction
         Vector3 moveDir = new Vector3(smoothedVelocity.x, 0f, smoothedVelocity.z);
         if (moveDir.sqrMagnitude < 0.01f)
             moveDir = new Vector3(transform.forward.x, 0f, transform.forward.z);
@@ -874,19 +1164,13 @@ public class EnemyController : MonoBehaviour
 
         Vector3 origin = transform.position + Vector3.up * 0.5f;
 
-        // SphereCast forward to find the nearest obstacle
         if (!Physics.SphereCast(origin, obstacleScanRadius, moveDir, out RaycastHit hit,
                 obstacleScanDistance, obstacleLayers, QueryTriggerInteraction.Ignore))
             return float.MinValue;
 
-        // Return the top of the obstacle + clearance margin
         return hit.collider.bounds.max.y + obstacleOvershootHeight;
     }
 
-    /// <summary>
-    /// Returns true when there is an obstacle directly ahead that requires climbing.
-    /// Used to select the faster lift speed.
-    /// </summary>
     private bool IsObstacleAhead()
     {
         Vector3 moveDir = new Vector3(smoothedVelocity.x, 0f, smoothedVelocity.z);
@@ -920,19 +1204,16 @@ public class EnemyController : MonoBehaviour
     {
         Vector3 origin = transform.position + Vector3.up * 10f;
 
-        // Check ground
         float groundY = Physics.Raycast(origin, Vector3.down, out RaycastHit groundHit,
             heightRaycastDistance, groundLayers, QueryTriggerInteraction.Ignore)
             ? groundHit.point.y
             : 0f;
 
-        // Also check obstacles directly below — enemy should float above them too
         float obstacleY = Physics.Raycast(origin, Vector3.down, out RaycastHit obstacleHit,
             heightRaycastDistance, obstacleLayers, QueryTriggerInteraction.Ignore)
             ? obstacleHit.point.y
             : float.MinValue;
 
-        // Return the highest surface beneath the enemy
         return Mathf.Max(groundY, obstacleY);
     }
 
