@@ -93,6 +93,16 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private float avoidanceRadius = 0.5f;
     [SerializeField] private float avoidanceStrength = 4f;
 
+    [Header("Obstacle Clearance (flying over)")]
+    [Tooltip("How far ahead to scan for obstacles to fly over.")]
+    [SerializeField] private float obstacleScanDistance = 6f;
+    [Tooltip("Extra height added on top of a detected obstacle before flying over it.")]
+    [SerializeField] private float obstacleOvershootHeight = 1.2f;
+    [Tooltip("How quickly the enemy rises to clear an obstacle (blended with normal vertical speed).")]
+    [SerializeField] private float obstacleLiftSpeed = 6f;
+    [Tooltip("Horizontal radius of the forward scan capsule used to detect obstacles ahead.")]
+    [SerializeField] private float obstacleScanRadius = 0.6f;
+
     [Header("Boundary")]
     [SerializeField] private float boundaryLookAhead = 3f;
     [SerializeField] private float boundaryStrength = 6f;
@@ -131,6 +141,34 @@ public class EnemyController : MonoBehaviour
     [Header("Flashlight / Kill")]
     [SerializeField] private float flashlightKillTime = 2f;
     [SerializeField] private float dissolveSpeed = 1.5f;
+
+    [Header("Aggression Scaling (set on prefab, injected by spawner)")]
+    [Tooltip("Minimum aggression floor at the very start of the game (0 = fully timid, 1 = fully reckless).")]
+    [SerializeField, Range(0f, 1f)] private float aggressionAtStart = 0f;
+    [Tooltip("Maximum aggression floor reached after aggressionRampDuration seconds (0–1).")]
+    [SerializeField, Range(0f, 1f)] private float aggressionAtEnd = 0.7f;
+    [Tooltip("Time in seconds it takes to go from aggressionAtStart to aggressionAtEnd.")]
+    [SerializeField] private float aggressionRampDuration = 180f;
+
+    [Tooltip("Move speed multiplier at minimum aggression.")]
+    [SerializeField] private float speedMultiplierMin = 1.0f;
+    [Tooltip("Move speed multiplier at maximum aggression.")]
+    [SerializeField] private float speedMultiplierMax = 1.6f;
+
+    [Tooltip("Damage multiplier at minimum aggression.")]
+    [SerializeField] private float damageMultiplierMin = 0.5f;
+    [Tooltip("Damage multiplier at maximum aggression.")]
+    [SerializeField] private float damageMultiplierMax = 2.0f;
+
+    [Tooltip("Lunge trigger distance multiplier at minimum aggression.")]
+    [SerializeField] private float lungeDistanceMultiplierMin = 0.7f;
+    [Tooltip("Lunge trigger distance multiplier at maximum aggression.")]
+    [SerializeField] private float lungeDistanceMultiplierMax = 1.8f;
+
+    [Tooltip("Lunge speed multiplier at minimum aggression.")]
+    [SerializeField] private float lungeSpeedMultiplierMin = 0.8f;
+    [Tooltip("Lunge speed multiplier at maximum aggression.")]
+    [SerializeField] private float lungeSpeedMultiplierMax = 1.4f;
 
     [Header("Crowd Spreading / Surround")]
     [SerializeField] private float crowdCheckInterval = 0.7f;
@@ -189,6 +227,9 @@ public class EnemyController : MonoBehaviour
     // Flee direction (set when ghost touches player)
     private Vector3 fleeDirection;
 
+    // Injected by EnemySpawner — used to scale aggression on spawn
+    private float gameTimeSurvived;
+
     // ────────────────────────────────────────────────────────────────────────────
     // Unity lifecycle
     // ────────────────────────────────────────────────────────────────────────────
@@ -209,6 +250,7 @@ public class EnemyController : MonoBehaviour
         personalExtraFlyHeight = Random.Range(minExtraFlyHeight, maxExtraFlyHeight);
         likesClimbingEnemies = Random.value <= climbOverEnemyChance;
         returnToGroundDistance = Random.Range(2.5f, 7f);
+        // Base aggression is random, but clamped — actual scaling applied in InitStats() after SetSurvivedTime
         aggressionBias = Random.value;
 
         flankSide = Random.value < 0.5f ? 1f : -1f;
@@ -267,6 +309,40 @@ public class EnemyController : MonoBehaviour
     // Public API
     // ────────────────────────────────────────────────────────────────────────────
     public void SetTarget(Transform target) => playerTarget = target;
+
+    /// <summary>
+    /// Called by EnemySpawner right after instantiation.
+    /// The longer the game has been running, the higher the minimum aggression floor.
+    /// All thresholds and multipliers are configurable in the Inspector.
+    /// </summary>
+    public void SetSurvivedTime(float survivedTime)
+    {
+        gameTimeSurvived = survivedTime;
+
+        // Aggression floor interpolates from aggressionAtStart → aggressionAtEnd over aggressionRampDuration
+        float t = aggressionRampDuration > 0f
+            ? Mathf.Clamp01(survivedTime / aggressionRampDuration)
+            : 1f;
+        float aggressionFloor = Mathf.Lerp(aggressionAtStart, aggressionAtEnd, t);
+
+        // Random personality bias is kept if it's already more aggressive than the floor
+        aggressionBias = Mathf.Max(aggressionBias, aggressionFloor);
+
+        ApplyAggressionStats();
+    }
+
+    /// <summary>
+    /// Scales move speed, damage and lunge range based on aggressionBias.
+    /// All multiplier ranges are configurable in the Inspector.
+    /// Called once after aggressionBias is finalised.
+    /// </summary>
+    private void ApplyAggressionStats()
+    {
+        moveSpeed *= Mathf.Lerp(speedMultiplierMin, speedMultiplierMax, aggressionBias);
+        damagePercentage *= Mathf.Lerp(damageMultiplierMin, damageMultiplierMax, aggressionBias);
+        lungeTriggerDistance *= Mathf.Lerp(lungeDistanceMultiplierMin, lungeDistanceMultiplierMax, aggressionBias);
+        lungeSpeed *= Mathf.Lerp(lungeSpeedMultiplierMin, lungeSpeedMultiplierMax, aggressionBias);
+    }
 
     public void TakeRecoil(Vector3 hitDirection)
     {
@@ -718,7 +794,10 @@ public class EnemyController : MonoBehaviour
         float distToPlayer = Vector3.Distance(transform.position, playerTarget.position);
         float targetY = GetTargetFlyingHeight(distToPlayer);
         float diff = targetY - transform.position.y;
-        return Mathf.Clamp(diff * verticalSpeed, -verticalSpeed, verticalSpeed);
+
+        // Use the faster lift speed when clearing an obstacle, normal vertical speed otherwise
+        float speed = IsObstacleAhead() ? obstacleLiftSpeed : verticalSpeed;
+        return Mathf.Clamp(diff * speed, -verticalSpeed, speed);
     }
 
     private float GetTargetFlyingHeight(float distToPlayer)
@@ -741,7 +820,51 @@ public class EnemyController : MonoBehaviour
             if (climbHeight > desiredHeight) desiredHeight = climbHeight;
         }
 
+        // Fly over any obstacle directly ahead
+        float clearanceHeight = GetObstacleClearHeight();
+        if (clearanceHeight > desiredHeight)
+            desiredHeight = clearanceHeight;
+
         return Mathf.Clamp(desiredHeight, restHeight, maxHeight);
+    }
+
+    /// <summary>
+    /// Scans ahead in the movement direction for obstacles and returns the Y the
+    /// enemy must reach to clear the top of the obstacle, or float.MinValue if clear.
+    /// </summary>
+    private float GetObstacleClearHeight()
+    {
+        // Use current horizontal velocity as the look-ahead direction; fall back to facing direction
+        Vector3 moveDir = new Vector3(smoothedVelocity.x, 0f, smoothedVelocity.z);
+        if (moveDir.sqrMagnitude < 0.01f)
+            moveDir = new Vector3(transform.forward.x, 0f, transform.forward.z);
+        moveDir.Normalize();
+
+        Vector3 origin = transform.position + Vector3.up * 0.5f;
+
+        // SphereCast forward to find the nearest obstacle
+        if (!Physics.SphereCast(origin, obstacleScanRadius, moveDir, out RaycastHit hit,
+                obstacleScanDistance, obstacleLayers, QueryTriggerInteraction.Ignore))
+            return float.MinValue;
+
+        // Return the top of the obstacle + clearance margin
+        return hit.collider.bounds.max.y + obstacleOvershootHeight;
+    }
+
+    /// <summary>
+    /// Returns true when there is an obstacle directly ahead that requires climbing.
+    /// Used to select the faster lift speed.
+    /// </summary>
+    private bool IsObstacleAhead()
+    {
+        Vector3 moveDir = new Vector3(smoothedVelocity.x, 0f, smoothedVelocity.z);
+        if (moveDir.sqrMagnitude < 0.01f)
+            moveDir = new Vector3(transform.forward.x, 0f, transform.forward.z);
+        moveDir.Normalize();
+
+        Vector3 origin = transform.position + Vector3.up * 0.5f;
+        return Physics.SphereCast(origin, obstacleScanRadius, moveDir, out _,
+            obstacleScanDistance, obstacleLayers, QueryTriggerInteraction.Ignore);
     }
 
     private float GetEnemyClimbHeight()
@@ -764,10 +887,21 @@ public class EnemyController : MonoBehaviour
     private float GetSurfaceY()
     {
         Vector3 origin = transform.position + Vector3.up * 10f;
-        return Physics.Raycast(origin, Vector3.down, out RaycastHit hit,
+
+        // Check ground
+        float groundY = Physics.Raycast(origin, Vector3.down, out RaycastHit groundHit,
             heightRaycastDistance, groundLayers, QueryTriggerInteraction.Ignore)
-            ? hit.point.y
+            ? groundHit.point.y
             : 0f;
+
+        // Also check obstacles directly below — enemy should float above them too
+        float obstacleY = Physics.Raycast(origin, Vector3.down, out RaycastHit obstacleHit,
+            heightRaycastDistance, obstacleLayers, QueryTriggerInteraction.Ignore)
+            ? obstacleHit.point.y
+            : float.MinValue;
+
+        // Return the highest surface beneath the enemy
+        return Mathf.Max(groundY, obstacleY);
     }
 
     // ────────────────────────────────────────────────────────────────────────────
@@ -801,7 +935,7 @@ public class EnemyController : MonoBehaviour
             pc.ApplyKnockback(dir, knockbackForce, upwardKnockbackForce);
         }
 
-        // Ghost flees after dealing damage instead of instantly dying
-        BeginFleeing(health.transform.position);
+        // Enemy vanishes instantly after dealing damage
+        Destroy(gameObject);
     }
 }

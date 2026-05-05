@@ -140,7 +140,10 @@ public class EnemySpawner : MonoBehaviour
             GameObject enemy = Instantiate(enemyPrefab, spawnPosition, Quaternion.identity);
 
             if (enemy.TryGetComponent(out EnemyController controller))
+            {
                 controller.SetTarget(player);
+                controller.SetSurvivedTime(survivedTime);
+            }
 
             activeEnemies.Add(enemy);
         }

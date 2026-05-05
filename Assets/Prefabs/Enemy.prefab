@@ -132,7 +132,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: dae0ebf2b3f1628449de4794f8420c4d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: '::'
-  moveSpeed: 5
+  moveSpeed: 3
   chaseSpeedMultiplier: 1.5
   acceleration: 12
   rotationSpeed: 8
@@ -145,14 +145,14 @@ MonoBehaviour:
   heightRaycastDistance: 30
   chanceToFlyHigh: 0.35
   minExtraFlyHeight: 1
-  maxExtraFlyHeight: 7
+  maxExtraFlyHeight: 10
   heightFollowDistance: 12
   climbOverEnemyChance: 0.35
-  climbOverEnemyHeight: 2.2
+  climbOverEnemyHeight: 3
   climbCheckDistance: 3
   boostStartDistance: 15
   boostMaxDistance: 50
-  maxBoostMultiplier: 4
+  maxBoostMultiplier: 2
   flankChance: 0.69
   flankDuration: 12
   flankOrbitRadius: 5
@@ -182,7 +182,7 @@ MonoBehaviour:
     m_Bits: 1024
   avoidanceDistance: 4
   avoidanceRadius: 0.5
-  avoidanceStrength: 4
+  avoidanceStrength: 5
   boundaryLookAhead: 3
   boundaryStrength: 6
   heightChangeInterval: 3
@@ -206,6 +206,17 @@ MonoBehaviour:
   weakenedRetreatDistance: 12
   flashlightKillTime: 2
   dissolveSpeed: 1.5
+  aggressionAtStart: 0
+  aggressionAtEnd: 0.7
+  aggressionRampDuration: 600
+  speedMultiplierMin: 1
+  speedMultiplierMax: 1.6
+  damageMultiplierMin: 0.5
+  damageMultiplierMax: 2
+  lungeDistanceMultiplierMin: 0.7
+  lungeDistanceMultiplierMax: 1.8
+  lungeSpeedMultiplierMin: 0.8
+  lungeSpeedMultiplierMax: 1.4
   crowdCheckInterval: 0.7
   crowdSpreadRadius: 8
   maxNearbyAttackersBeforeSpread: 5
