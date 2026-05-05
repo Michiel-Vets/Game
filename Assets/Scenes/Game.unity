@@ -259,7 +259,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3dd9393fad394044ea8fa4ba518a729a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FlashlightController
-  toggleKey: 102
   flashlight: {fileID: 236473170}
   startsOn: 0
   maxDistance: 25
@@ -2339,6 +2338,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: '::'
   healthController: {fileID: 0}
   cameraLook: {fileID: 6671252408555131260}
+  flashlightController: {fileID: 236473171}
   moveSpeed: 5
   sprintSpeed: 7
   lookSensitivity: 0.1

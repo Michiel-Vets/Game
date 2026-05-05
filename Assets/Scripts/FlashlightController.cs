@@ -2,9 +2,6 @@ using UnityEngine;
 
 public class FlashlightController : MonoBehaviour
 {
-    [Header("Input")]
-    [SerializeField] private KeyCode toggleKey = KeyCode.F;
-
     [Header("Light")]
     [SerializeField] private Light flashlight;
     [SerializeField] private bool startsOn = true;
@@ -17,6 +14,8 @@ public class FlashlightController : MonoBehaviour
     [SerializeField] private bool damageEnemies = true;
     [SerializeField] private LayerMask enemyLayers;
     [SerializeField] private LayerMask obstacleLayers;
+
+    public bool IsOn => isOn;
 
     private bool isOn;
 
@@ -34,21 +33,14 @@ public class FlashlightController : MonoBehaviour
 
     void Update()
     {
-        HandleInput();
-
         if (isOn && damageEnemies)
-        {
             HandleBeam();
-        }
     }
 
-    private void HandleInput()
+    public void Toggle()
     {
-        if (Input.GetKeyDown(toggleKey))
-        {
-            isOn = !isOn;
-            ApplyState();
-        }
+        isOn = !isOn;
+        ApplyState();
     }
 
     private void ApplyState()
@@ -62,30 +54,28 @@ public class FlashlightController : MonoBehaviour
         Vector3 origin = transform.position;
         Vector3 direction = transform.forward;
 
-        RaycastHit hit;
-
-        // Check of licht geblokkeerd wordt
-        if (Physics.Raycast(origin, direction, out hit, maxDistance, obstacleLayers))
+        float effectiveDistance = maxDistance;
+        if (obstacleLayers != 0 &&
+            Physics.Raycast(origin, direction, out RaycastHit obstacleHit, maxDistance, obstacleLayers))
         {
-            maxDistance = hit.distance;
+            effectiveDistance = obstacleHit.distance;
         }
 
-        // Zoek enemies in de straal
-        Collider[] hits = Physics.OverlapSphere(origin + direction * (maxDistance / 2f), hitRadius, enemyLayers);
+        RaycastHit[] hits = Physics.SphereCastAll(
+            origin, hitRadius, direction, effectiveDistance, enemyLayers);
 
-        foreach (Collider col in hits)
+        foreach (RaycastHit hit in hits)
         {
-            EnemyController enemy = col.GetComponent<EnemyController>();
+            EnemyController enemy = hit.collider.GetComponentInParent<EnemyController>();
             if (enemy == null) continue;
 
-            // Check of enemy effectief in de lichtstraal zit
-            Vector3 toEnemy = (enemy.transform.position - origin).normalized;
-            float dot = Vector3.Dot(direction, toEnemy);
-
-            if (dot > 0.8f) // redelijk recht in de lichtstraal
-            {
-                enemy.ReceiveFlashlightHit();
-            }
+            enemy.ReceiveFlashlightHit();
         }
+    }
+
+    private void OnDrawGizmosSelected()
+    {
+        Gizmos.color = Color.yellow;
+        Gizmos.DrawRay(transform.position, transform.forward * maxDistance);
     }
 }

@@ -8,6 +8,7 @@ public class PlayerController : MonoBehaviour
     [Header("References")]
     [SerializeField] private HealthController healthController;
     [SerializeField] private CameraLook cameraLook;
+    [SerializeField] private FlashlightController flashlightController;
 
     [Header("Movement")]
     [SerializeField] private float moveSpeed = 5f;
@@ -70,6 +71,7 @@ public class PlayerController : MonoBehaviour
 
         HandleSprintKeyboardFallback();
         HandleJumpKeyboardFallback();
+        HandleFlashlightKeyboardFallback();
         HandleDebugHealthInput();
     }
 
@@ -179,6 +181,12 @@ public class PlayerController : MonoBehaviour
     {
         if (Keyboard.current != null && Keyboard.current.spaceKey.wasPressedThisFrame)
             jumpRequested = true;
+    }
+
+    private void HandleFlashlightKeyboardFallback()
+    {
+        if (Keyboard.current != null && Keyboard.current.fKey.wasPressedThisFrame && flashlightController != null)
+            flashlightController.Toggle();
     }
 
     private void HandleDebugHealthInput()

@@ -134,13 +134,18 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private float fleeDuration = 2.5f;
 
     [Header("Weakened (flashlight spotted then lost)")]
-    [SerializeField] private float weakenedSpeed = 2f;
-    [SerializeField] private float weakenedDuration = 6f;
-    [SerializeField] private float weakenedRetreatDistance = 12f;
+    [SerializeField] private float weakenedSpeed = 1.5f;
+    [SerializeField] private float weakenedRetreatDistance = 30f;
 
-    [Header("Flashlight / Kill")]
+    [Header("Flashlight / Health")]
+    [Tooltip("Seconden om de enemy van vol naar dood te belichten.")]
     [SerializeField] private float flashlightKillTime = 2f;
-    [SerializeField] private float dissolveSpeed = 1.5f;
+    [Tooltip("Seconden voordat de enemy volledig herstelt als hij niet belicht wordt en ver genoeg is.")]
+    [SerializeField] private float healTime = 5f;
+    [Tooltip("Minimale afstand tot de speler voordat de enemy begint te herstellen.")]
+    [SerializeField] private float healMinDistance = 30f;
+    [Tooltip("Snelheid waarmee de scale verandert (zichtbaar krimpen/groeien).")]
+    [SerializeField] private float scaleChangeSpeed = 2f;
 
     [Header("Aggression Scaling (set on prefab, injected by spawner)")]
     [Tooltip("Minimum aggression floor at the very start of the game (0 = fully timid, 1 = fully reckless).")]
@@ -220,9 +225,10 @@ public class EnemyController : MonoBehaviour
     private float currentTargetHeight;
     private float heightTimer;
 
-    // Flashlight
-    private float flashlightExposureTime;
+    // Flashlight / Health (0 = vol leven, 1 = dood)
+    private float flashlightDamage = 0f;   // 0..1, groeit bij belichting, krimpt bij herstel
     private bool isInFlashlightBeam;
+    private Vector3 originalScale;
 
     // Flee direction (set when ghost touches player)
     private Vector3 fleeDirection;
@@ -260,6 +266,7 @@ public class EnemyController : MonoBehaviour
         lungeCooldownTimer.ResetRandom(0f, 10f);
         currentTargetHeight = Random.Range(minWanderHeight, maxWanderHeight);
         heightTimer = Random.Range(0f, heightChangeInterval);
+        originalScale = transform.localScale;
     }
 
     private void Start()
@@ -364,7 +371,10 @@ public class EnemyController : MonoBehaviour
     }
 
     // ────────────────────────────────────────────────────────────────────────────
-    // Flashlight exposure
+    // Flashlight / Health systeem
+    // flashlightDamage loopt van 0 (vol) tot 1 (dood).
+    // Scale = originalScale * (1 - flashlightDamage), zodat de enemy zichtbaar krimpt.
+    // Als de enemy niet belicht wordt en ver genoeg is herstelt hij langzaam.
     // ────────────────────────────────────────────────────────────────────────────
     private void UpdateFlashlightExposure(float dt)
     {
@@ -373,28 +383,52 @@ public class EnemyController : MonoBehaviour
 
         if (isInFlashlightBeam)
         {
-            flashlightExposureTime += dt;
+            // Schade opbouwen terwijl de zaklamp schijnt
+            flashlightDamage += dt / flashlightKillTime;
+            flashlightDamage = Mathf.Clamp01(flashlightDamage);
 
-            if (flashlightExposureTime >= flashlightKillTime)
+            // Weakened state zetten zodra de enemy belicht wordt
+            if (state != BehaviourState.Weakened)
+                EnterWeakened();
+
+            // Dood bij vol schade
+            if (flashlightDamage >= 1f)
                 BeginDying();
         }
         else
         {
-            // Light left before the kill threshold — ghost is spooked but survives
-            if (flashlightExposureTime > 0f && state != BehaviourState.Weakened)
-                EnterWeakened();
+            // Niet belicht: herstel als de enemy ver genoeg van de speler is
+            if (state == BehaviourState.Weakened && flashlightDamage > 0f && playerTarget != null)
+            {
+                float dist = Vector3.Distance(transform.position, playerTarget.position);
+                if (dist >= healMinDistance)
+                {
+                    flashlightDamage -= dt / healTime;
+                    flashlightDamage = Mathf.Max(0f, flashlightDamage);
 
-            flashlightExposureTime = 0f;
+                    // Volledig hersteld: terug naar aanval
+                    if (flashlightDamage <= 0f)
+                        TransitionToAttack(dist);
+                }
+            }
         }
+
+        // Scale altijd bijwerken op basis van huidige schade
+        ApplyDamageScale();
+    }
+
+    private void ApplyDamageScale()
+    {
+        float healthFraction = 1f - flashlightDamage;
+        Vector3 targetScale = originalScale * healthFraction;
+        transform.localScale = Vector3.MoveTowards(
+            transform.localScale, targetScale, scaleChangeSpeed * Time.fixedDeltaTime);
     }
 
     private void EnterWeakened()
     {
         if (state == BehaviourState.Dying) return;
-
         state = BehaviourState.Weakened;
-        // Aggressive ghosts recover from weaken faster
-        stateTimer = weakenedDuration * Mathf.Lerp(1.5f, 0.6f, aggressionBias);
     }
 
     private void BeginDying()
@@ -421,12 +455,9 @@ public class EnemyController : MonoBehaviour
     {
         float distToPlayer = Vector3.Distance(transform.position, playerTarget.position);
 
-        // ── Dying: shrink and destroy ──
+        // ── Dying: scale krimpt via ApplyDamageScale, destroy als klein genoeg ──
         if (state == BehaviourState.Dying)
         {
-            transform.localScale = Vector3.MoveTowards(
-                transform.localScale, Vector3.zero, dissolveSpeed * dt);
-
             if (transform.localScale.sqrMagnitude < 0.001f)
                 Destroy(gameObject);
             return;
@@ -441,14 +472,9 @@ public class EnemyController : MonoBehaviour
             return;
         }
 
-        // ── Weakened: retreat until timer expires, then recover ──
+        // ── Weakened: vluchten — herstel en state change gebeurt in UpdateFlashlightExposure ──
         if (state == BehaviourState.Weakened)
-        {
-            stateTimer -= dt;
-            if (stateTimer <= 0f)
-                TransitionToAttack(distToPlayer);
             return;
-        }
 
         if (state == BehaviourState.Recoil)
         {
@@ -692,11 +718,12 @@ public class EnemyController : MonoBehaviour
     /// </summary>
     private Vector3 GetWeakenedDirection(Vector3 toPlayerFlat, float distToPlayer)
     {
+        // Altijd wegvluchten van de speler tot de herstelafstand bereikt is
         if (distToPlayer < weakenedRetreatDistance)
             return -toPlayerFlat;
 
-        // Far enough away — drift sideways so it doesn't just hover in place
-        return Vector3.Cross(toPlayerFlat, Vector3.up) * flankSide;
+        // Ver genoeg: stilstaan zodat herstel kan beginnen
+        return Vector3.zero;
     }
 
     // ────────────────────────────────────────────────────────────────────────────
@@ -768,7 +795,12 @@ public class EnemyController : MonoBehaviour
     // ────────────────────────────────────────────────────────────────────────────
     private float GetTargetSpeed(float distToPlayer)
     {
-        if (state == BehaviourState.Weakened) return weakenedSpeed;
+        if (state == BehaviourState.Weakened)
+        {
+            // Hoe meer schade, hoe trager — bij vol schade bijna stilstaand
+            float speedFraction = 1f - (flashlightDamage * 0.85f);
+            return weakenedSpeed * speedFraction;
+        }
         if (state == BehaviourState.Fleeing) return fleeSpeed;
 
         float baseSpeed = moveSpeed * chaseSpeedMultiplier;
