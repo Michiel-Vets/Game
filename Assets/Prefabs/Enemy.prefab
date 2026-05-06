@@ -9,11 +9,9 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 3654651204704194860}
-  - component: {fileID: 6273542778613355223}
-  - component: {fileID: 3396316497787180709}
-  - component: {fileID: 7813691904567466451}
-  - component: {fileID: 5373964574242872775}
-  - component: {fileID: 6467528723785307569}
+  - component: {fileID: 6284667571052533894}
+  - component: {fileID: 1071032898758912918}
+  - component: {fileID: -2867810269426647493}
   m_Layer: 9
   m_Name: Enemy
   m_TagString: Untagged
@@ -29,71 +27,15 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 3023488764070476685}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -3.5, y: 1.2, z: 24.4}
-  m_LocalScale: {x: 1, y: 2, z: 1}
+  m_LocalRotation: {x: 0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: -0, y: 3.6, z: 0}
+  m_LocalScale: {x: 0.1, y: 0.1, z: 0.1}
   m_ConstrainProportionsScale: 0
-  m_Children: []
+  m_Children:
+  - {fileID: 7557713358660629019}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!33 &6273542778613355223
-MeshFilter:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 3023488764070476685}
-  m_Mesh: {fileID: 10207, guid: 0000000000000000e000000000000000, type: 0}
---- !u!23 &3396316497787180709
-MeshRenderer:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 3023488764070476685}
-  m_Enabled: 1
-  m_CastShadows: 1
-  m_ReceiveShadows: 1
-  m_DynamicOccludee: 1
-  m_StaticShadowCaster: 0
-  m_MotionVectors: 1
-  m_LightProbeUsage: 1
-  m_ReflectionProbeUsage: 1
-  m_RayTracingMode: 2
-  m_RayTraceProcedural: 0
-  m_RayTracingAccelStructBuildFlagsOverride: 0
-  m_RayTracingAccelStructBuildFlags: 1
-  m_SmallMeshCulling: 1
-  m_ForceMeshLod: -1
-  m_MeshLodSelectionBias: 0
-  m_RenderingLayerMask: 1
-  m_RendererPriority: 0
-  m_Materials:
-  - {fileID: 2100000, guid: 31321ba15b8f8eb4c954353edc038b1d, type: 2}
-  m_StaticBatchInfo:
-    firstSubMesh: 0
-    subMeshCount: 0
-  m_StaticBatchRoot: {fileID: 0}
-  m_ProbeAnchor: {fileID: 0}
-  m_LightProbeVolumeOverride: {fileID: 0}
-  m_ScaleInLightmap: 1
-  m_ReceiveGI: 1
-  m_PreserveUVs: 0
-  m_IgnoreNormalsForChartDetection: 0
-  m_ImportantGI: 0
-  m_StitchLightmapSeams: 1
-  m_SelectedEditorRenderState: 3
-  m_MinimumChartSize: 4
-  m_AutoUVMaxDistance: 0.5
-  m_AutoUVMaxAngle: 89
-  m_LightmapParameters: {fileID: 0}
-  m_GlobalIlluminationMeshLod: 0
-  m_SortingLayerID: 0
-  m_SortingLayer: 0
-  m_SortingOrder: 0
-  m_MaskInteraction: 0
-  m_AdditionalVertexStreams: {fileID: 0}
---- !u!54 &7813691904567466451
+--- !u!54 &6284667571052533894
 Rigidbody:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -117,10 +59,10 @@ Rigidbody:
   m_ImplicitTensor: 1
   m_UseGravity: 1
   m_IsKinematic: 0
-  m_Interpolate: 1
+  m_Interpolate: 0
   m_Constraints: 0
-  m_CollisionDetection: 1
---- !u!114 &5373964574242872775
+  m_CollisionDetection: 0
+--- !u!114 &1071032898758912918
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -131,29 +73,29 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: dae0ebf2b3f1628449de4794f8420c4d, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: '::'
-  moveSpeed: 3
-  chaseSpeedMultiplier: 1.8
-  acceleration: 12
+  m_EditorClassIdentifier: Assembly-CSharp::EnemyController
+  moveSpeed: 5
+  chaseSpeedMultiplier: 1.5
+  acceleration: 10
   rotationSpeed: 8
   groundLayers:
     serializedVersion: 2
-    m_Bits: 128
-  preferredFloatHeight: 1.6
-  maxFloatHeight: 5
-  verticalSpeed: 3.5
+    m_Bits: 0
+  preferredFloatHeight: 3
+  maxFloatHeight: 10
+  verticalSpeed: 4
   heightRaycastDistance: 30
   chanceToFlyHigh: 0.35
   minExtraFlyHeight: 1
-  maxExtraFlyHeight: 10
+  maxExtraFlyHeight: 4
   heightFollowDistance: 12
   climbOverEnemyChance: 0.35
-  climbOverEnemyHeight: 3
+  climbOverEnemyHeight: 2.2
   climbCheckDistance: 3
   boostStartDistance: 15
   boostMaxDistance: 50
   maxBoostMultiplier: 2
-  flankChance: 0.69
+  flankChance: 0.45
   flankDuration: 12
   flankOrbitRadius: 5
   flankOrbitSpeed: 1.2
@@ -162,27 +104,27 @@ MonoBehaviour:
   interceptDistance: 20
   minInterceptDistance: 10
   interceptChance: 0.12
-  interceptLookAhead: 1.2
+  interceptLookAhead: 0.6
   interceptMinDuration: 1.5
   interceptMaxDuration: 3
   lungeTriggerDistance: 5
-  lungeChance: 0.111
-  lungePrepareTime: 2
+  lungeChance: 0.1
+  lungePrepareTime: 1.5
   lungeSpeed: 22
   lungeDuration: 0.45
-  lungeExhaustTime: 5
-  lungeCooldown: 45
+  lungeExhaustTime: 4
+  lungeCooldown: 40
   enemyLayers:
     serializedVersion: 2
-    m_Bits: 512
+    m_Bits: 0
   separationRadius: 2.5
-  separationStrength: 5
+  separationStrength: 3
   obstacleLayers:
     serializedVersion: 2
-    m_Bits: 1024
+    m_Bits: 0
   avoidanceDistance: 4
   avoidanceRadius: 0.5
-  avoidanceStrength: 5
+  avoidanceStrength: 4
   obstacleScanDistance: 6
   obstacleOvershootHeight: 1.2
   obstacleLiftSpeed: 6
@@ -197,8 +139,8 @@ MonoBehaviour:
   fatigueStartTime: 30
   fatigueDuration: 10
   fatigueMinMultiplier: 0.7
-  recoilForce: 12
-  recoilDuration: 1
+  recoilForce: 6
+  recoilDuration: 0.35
   deathLaunchSpeed: 16
   deathSpinSpeed: 360
   deathRiseDuration: 1.8
@@ -207,28 +149,26 @@ MonoBehaviour:
   weakenedFallSpeed: 6
   attackDistance: 2.2
   damagePercentage: 0.1
-  knockbackForce: 18
-  upwardKnockbackForce: 4
+  knockbackForce: 8
+  upwardKnockbackForce: 2
   fleeSpeed: 8
   fleeDuration: 2.5
-  weakenedSpeed: 2
-  weakenedRetreatDistance: 12
-  flashlightKillTime: 0.7
+  weakenedSpeed: 1.5
+  weakenedRetreatDistance: 30
+  flashlightKillTime: 2
   healTime: 5
   partialHealTimeMultiplier: 2.5
   scaleChangeSpeed: 2
   beamEvasionStrength: 6
   beamEvasionRadius: 3
   beamEvasionChance: 0.85
-  aggressionAtStart: 0
-  aggressionAtEnd: 0.7
-  aggressionRampDuration: 600
+  aggressionSpreadDuration: 300
   speedMultiplierMin: 0.4
   speedMultiplierMax: 2.8
-  damageMultiplierMin: 3.5
-  damageMultiplierMax: 0.2
-  lungeDistanceMultiplierMin: 0.4
-  lungeDistanceMultiplierMax: 2.5
+  damageMultiplierMin: 2.5
+  damageMultiplierMax: 0.8
+  lungeDistanceMultiplierMin: 0.7
+  lungeDistanceMultiplierMax: 1.8
   lungeSpeedMultiplierMin: 0.5
   lungeSpeedMultiplierMax: 2.2
   scaleAtMinAggression: 2.8
@@ -257,7 +197,7 @@ MonoBehaviour:
   staminaRecoverThreshold: 0.5
   chargeSprintDistance: 12
   flankSprintChance: 0.6
---- !u!136 &6467528723785307569
+--- !u!136 &-2867810269426647493
 CapsuleCollider:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -276,7 +216,97 @@ CapsuleCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 2
-  m_Radius: 0.5
+  m_Radius: 5
   m_Height: 1
   m_Direction: 1
-  m_Center: {x: 0, y: 0, z: 0}
+  m_Center: {x: 0, y: -5, z: -2}
+--- !u!1 &5797674448347770860
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 7557713358660629019}
+  - component: {fileID: 2517441815006952320}
+  - component: {fileID: 6741769255025447659}
+  m_Layer: 9
+  m_Name: default
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &7557713358660629019
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5797674448347770860}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: -0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 3654651204704194860}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!33 &2517441815006952320
+MeshFilter:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5797674448347770860}
+  m_Mesh: {fileID: -2432090755550338912, guid: 31c318f3385821640820929b9e0b75a7, type: 3}
+--- !u!23 &6741769255025447659
+MeshRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5797674448347770860}
+  m_Enabled: 1
+  m_CastShadows: 1
+  m_ReceiveShadows: 1
+  m_DynamicOccludee: 1
+  m_StaticShadowCaster: 0
+  m_MotionVectors: 1
+  m_LightProbeUsage: 1
+  m_ReflectionProbeUsage: 1
+  m_RayTracingMode: 2
+  m_RayTraceProcedural: 0
+  m_RayTracingAccelStructBuildFlagsOverride: 0
+  m_RayTracingAccelStructBuildFlags: 1
+  m_SmallMeshCulling: 1
+  m_ForceMeshLod: -1
+  m_MeshLodSelectionBias: 0
+  m_RenderingLayerMask: 1
+  m_RendererPriority: 0
+  m_Materials:
+  - {fileID: -3033667219593020291, guid: 31c318f3385821640820929b9e0b75a7, type: 3}
+  m_StaticBatchInfo:
+    firstSubMesh: 0
+    subMeshCount: 0
+  m_StaticBatchRoot: {fileID: 0}
+  m_ProbeAnchor: {fileID: 0}
+  m_LightProbeVolumeOverride: {fileID: 0}
+  m_ScaleInLightmap: 1
+  m_ReceiveGI: 1
+  m_PreserveUVs: 0
+  m_IgnoreNormalsForChartDetection: 0
+  m_ImportantGI: 0
+  m_StitchLightmapSeams: 1
+  m_SelectedEditorRenderState: 3
+  m_MinimumChartSize: 4
+  m_AutoUVMaxDistance: 0.5
+  m_AutoUVMaxAngle: 89
+  m_LightmapParameters: {fileID: 0}
+  m_GlobalIlluminationMeshLod: 0
+  m_SortingLayerID: 0
+  m_SortingLayer: 0
+  m_SortingOrder: 0
+  m_MaskInteraction: 0
+  m_AdditionalVertexStreams: {fileID: 0}

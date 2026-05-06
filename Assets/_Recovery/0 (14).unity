@@ -1276,7 +1276,7 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 128
   raycastHeight: 20
-  spawnYOffset: 0.5
+  spawnYOffset: 2
 --- !u!4 &1095565199
 Transform:
   m_ObjectHideFlags: 0
@@ -1622,11 +1622,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 46090c4c1bfc10842b4a82e5ca67a5cd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HealthController
-  maxHealth: 100
-  currentHealth: 0
-  healthBar: {fileID: 0}
-  fullWidth: 200
-  barHeight: 20
 --- !u!1 &1376704269
 GameObject:
   m_ObjectHideFlags: 0
