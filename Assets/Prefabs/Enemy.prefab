@@ -133,7 +133,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: '::'
   moveSpeed: 3
-  chaseSpeedMultiplier: 1.5
+  chaseSpeedMultiplier: 1.8
   acceleration: 12
   rotationSpeed: 8
   groundLayers:
@@ -207,13 +207,13 @@ MonoBehaviour:
   weakenedFallSpeed: 6
   attackDistance: 2.2
   damagePercentage: 0.1
-  knockbackForce: 12
+  knockbackForce: 18
   upwardKnockbackForce: 4
   fleeSpeed: 8
   fleeDuration: 2.5
   weakenedSpeed: 2
   weakenedRetreatDistance: 12
-  flashlightKillTime: 1.5
+  flashlightKillTime: 0.7
   healTime: 5
   partialHealTimeMultiplier: 2.5
   scaleChangeSpeed: 2
@@ -223,18 +223,18 @@ MonoBehaviour:
   aggressionAtStart: 0
   aggressionAtEnd: 0.7
   aggressionRampDuration: 600
-  speedMultiplierMin: 1
-  speedMultiplierMax: 1.6
-  damageMultiplierMin: 0.5
-  damageMultiplierMax: 2
-  lungeDistanceMultiplierMin: 0.7
-  lungeDistanceMultiplierMax: 1.8
-  lungeSpeedMultiplierMin: 0.8
-  lungeSpeedMultiplierMax: 1.4
-  scaleAtMinAggression: 1.5
-  scaleAtMaxAggression: 0.8
-  hpMultiplierMin: 2
-  hpMultiplierMax: 0.5
+  speedMultiplierMin: 0.4
+  speedMultiplierMax: 2.8
+  damageMultiplierMin: 3.5
+  damageMultiplierMax: 0.2
+  lungeDistanceMultiplierMin: 0.4
+  lungeDistanceMultiplierMax: 2.5
+  lungeSpeedMultiplierMin: 0.5
+  lungeSpeedMultiplierMax: 2.2
+  scaleAtMinAggression: 2.8
+  scaleAtMaxAggression: 0.35
+  hpMultiplierMin: 4.5
+  hpMultiplierMax: 0.2
   crowdCheckInterval: 0.7
   crowdSpreadRadius: 8
   maxNearbyAttackersBeforeSpread: 5

@@ -334,6 +334,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3dd9393fad394044ea8fa4ba518a729a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FlashlightController
+  batteryController: {fileID: 0}
   flashlight: {fileID: 236473170}
   startsOn: 0
   maxDistance: 50
@@ -1467,7 +1468,6 @@ GameObject:
   - component: {fileID: 1332593242}
   - component: {fileID: 1332593245}
   - component: {fileID: 1332593244}
-  - component: {fileID: 1332593243}
   m_Layer: 5
   m_Name: Battery Bar
   m_TagString: Untagged
@@ -1495,18 +1495,6 @@ RectTransform:
   m_AnchoredPosition: {x: 1150, y: -550}
   m_SizeDelta: {x: 15, y: 400}
   m_Pivot: {x: 0.5, y: 0.5}
---- !u!114 &1332593243
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1332593241}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 46090c4c1bfc10842b4a82e5ca67a5cd, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::HealthController
 --- !u!114 &1332593244
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1634,6 +1622,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 46090c4c1bfc10842b4a82e5ca67a5cd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HealthController
+  maxHealth: 100
+  currentHealth: 0
+  healthBar: {fileID: 0}
+  fullWidth: 200
+  barHeight: 20
 --- !u!1 &1376704269
 GameObject:
   m_ObjectHideFlags: 0
@@ -2376,6 +2369,7 @@ GameObject:
   - component: {fileID: 7737689766861733513}
   - component: {fileID: 8274528773792328047}
   - component: {fileID: 8960576402157799646}
+  - component: {fileID: 8960576402157799647}
   m_Layer: 0
   m_Name: Player
   m_TagString: Player
@@ -2802,6 +2796,24 @@ MonoBehaviour:
   flashSpeed: 4
   flashColorA: {r: 0.5, g: 0.5, b: 0.5, a: 1}
   flashColorB: {r: 0.6, g: 0, b: 0, a: 1}
+--- !u!114 &8960576402157799647
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2210930813662676648}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 516e0b0876f06864f987a4344e6e7164, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BatteryController
+  maxBattery: 100
+  currentBattery: 0
+  drainRate: 5
+  batteryBar: {fileID: 1378751802}
+  fullHeight: 200
+  barWidth: 20
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

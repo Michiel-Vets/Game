@@ -2,6 +2,9 @@ using UnityEngine;
 
 public class FlashlightController : MonoBehaviour
 {
+    [Header("References")]
+    [SerializeField] private BatteryController batteryController;
+
     [Header("Light")]
     [SerializeField] private Light flashlight;
     [SerializeField] private bool startsOn = true;
@@ -39,12 +42,30 @@ public class FlashlightController : MonoBehaviour
 
     void Update()
     {
-        if (isOn && damageEnemies)
-            HandleBeam();
+        if (isOn)
+        {
+            if (batteryController != null)
+            {
+                batteryController.DrainBattery(Time.deltaTime);
+
+                if (!batteryController.HasBattery)
+                {
+                    isOn = false;
+                    ApplyState();
+                    return;
+                }
+            }
+
+            if (damageEnemies)
+                HandleBeam();
+        }
     }
 
     public void Toggle()
     {
+        if (!isOn && batteryController != null && !batteryController.HasBattery)
+            return;
+
         isOn = !isOn;
         ApplyState();
     }
@@ -75,8 +96,6 @@ public class FlashlightController : MonoBehaviour
             EnemyController enemy = hit.collider.GetComponentInParent<EnemyController>();
             if (enemy == null) continue;
 
-            // Bereken hoe ver de enemy van de flashlight-oorsprong verwijderd is
-            // en schaal schade + vertraging lineair af op afstand.
             float hitDistance = Vector3.Distance(origin, hit.point);
             float distanceFraction = Mathf.Clamp01(hitDistance / maxDistance);
             float effectFactor = Mathf.Lerp(1f, minEffectAtMaxDistance,

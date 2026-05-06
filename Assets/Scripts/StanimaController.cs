@@ -1,4 +1,5 @@
-using UnityEngine;
+ï»¿using UnityEngine;
+using UnityEngine.UI;
 
 public class StaminaController : MonoBehaviour
 {
@@ -8,6 +9,7 @@ public class StaminaController : MonoBehaviour
     [SerializeField] private float staminaRechargeRate = 0.5f;
     [Tooltip("Minimale fractie die hersteld moet zijn voordat sprinten opnieuw mogelijk is.")]
     [SerializeField, Range(0f, 1f)] private float rechargeThreshold = 0.25f;
+    [SerializeField] private float jumpStaminaCost = 1.5f;
 
     [Header("Overexhausted (stamina leeg maar shift ingedrukt)")]
     [Tooltip("Snelheidsmultiplier tijdens overexhaustion (tussen loop- en sprintsnelheid).")]
@@ -15,20 +17,19 @@ public class StaminaController : MonoBehaviour
 
     [Header("Stamina Bar")]
     [SerializeField] private RectTransform staminaBar;
-    [SerializeField] private float fullWidth = 200f;
-    [SerializeField] private float barHeight = 20f;
+    [SerializeField] private Image staminaBarBackground;
+
+    [Header("Overexhausted Flash")]
+    [SerializeField] private float flashSpeed = 4f;
+    [SerializeField] private Color flashColorA = Color.gray;
+    [SerializeField] private Color flashColorB = new Color(0.6f, 0f, 0f, 1f);
 
     public float MaxStamina => maxStamina;
     public float CurrentStamina => currentStamina;
     public float StaminaFraction => maxStamina > 0f ? currentStamina / maxStamina : 0f;
     public bool IsExhausted => isExhausted;
 
-    /// <summary>
-    /// True als stamina leeg is én de speler shift nog ingedrukt houdt.
-    /// In deze toestand beweegt de speler op overexhaustedSpeedFraction en laadt stamina niet op.
-    /// </summary>
     public bool IsOverexhausted => isExhausted && isShiftHeld;
-
     public float OverexhaustedSpeedFraction => overexhaustedSpeedFraction;
 
     private float currentStamina;
@@ -44,18 +45,32 @@ public class StaminaController : MonoBehaviour
         UpdateStaminaVisuals();
     }
 
-    /// <summary>
-    /// Moet elke frame aangeroepen worden vanuit PlayerController
-    /// zodat StaminaController weet of shift ingedrukt is.
-    /// </summary>
+    private void Update()
+    {
+        UpdateBackgroundFlash();
+    }
+
     public void SetShiftHeld(bool held)
     {
         isShiftHeld = held;
     }
 
-    /// <summary>
-    /// Verbruikt stamina tijdens het sprinten. Geeft true terug als er nog stamina over is.
-    /// </summary>
+    public void DrainStaminaForJump()
+    {
+        if (isExhausted)
+            return;
+
+        currentStamina = Mathf.Max(0f, currentStamina - jumpStaminaCost);
+
+        if (currentStamina <= 0f)
+        {
+            currentStamina = 0f;
+            isExhausted = true;
+        }
+
+        UpdateStaminaVisuals();
+    }
+
     public bool DrainStamina(float deltaTime)
     {
         if (isExhausted)
@@ -73,20 +88,15 @@ public class StaminaController : MonoBehaviour
         return !isExhausted;
     }
 
-    /// <summary>
-    /// Herstelt stamina — alleen als shift NIET ingedrukt is.
-    /// </summary>
     public void RechargeStamina(float deltaTime)
     {
-        // Stamina laadt niet op zolang shift ingedrukt is na uitputting
-        if (isShiftHeld && isExhausted)
-            return;
-
         if (currentStamina >= maxStamina)
             return;
 
         currentStamina = Mathf.Min(currentStamina + staminaRechargeRate * deltaTime, maxStamina);
 
+        // Exhaustion opheft zodra de drempel bereikt is, ongeacht of shift ingedrukt is.
+        // Sprinten zelf is al geblokkeerd in PlayerController zolang IsExhausted true is.
         if (isExhausted && currentStamina >= maxStamina * rechargeThreshold)
             isExhausted = false;
 
@@ -105,6 +115,7 @@ public class StaminaController : MonoBehaviour
         if (staminaBar == null)
             return;
 
+        // Pivot en anchors links: de balk krimpt vanuit rechts, links blijft als laatste over
         staminaBar.pivot = new Vector2(0f, 0.5f);
         staminaBar.anchorMin = new Vector2(0f, 0.5f);
         staminaBar.anchorMax = new Vector2(0f, 0.5f);
@@ -115,6 +126,23 @@ public class StaminaController : MonoBehaviour
         if (staminaBar == null)
             return;
 
-        staminaBar.sizeDelta = new Vector2(fullWidth * StaminaFraction, barHeight);
+        staminaBar.localScale = new Vector3(StaminaFraction, 1f, 1f);
+    }
+
+    private void UpdateBackgroundFlash()
+    {
+        if (staminaBarBackground == null)
+            return;
+
+        // Flash alleen als de speler overexhausted is (stamina leeg Ã©n shift ingedrukt)
+        if (IsOverexhausted)
+        {
+            float t = (Mathf.Sin(Time.time * flashSpeed) + 1f) * 0.5f;
+            staminaBarBackground.color = Color.Lerp(flashColorA, flashColorB, t);
+        }
+        else
+        {
+            staminaBarBackground.color = flashColorA;
+        }
     }
 }

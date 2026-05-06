@@ -139,21 +139,8 @@ public class PlayerController : MonoBehaviour
         Vector3 worldDirection = transform.TransformDirection(new Vector3(moveInput.x, 0f, moveInput.y));
 
         float speed;
-        if (staminaController == null || !staminaController.IsExhausted)
-        {
-            // Normaal of sprint
-            bool canSprint = isSprinting && (staminaController == null || !staminaController.IsExhausted);
-            speed = canSprint ? sprintSpeed : moveSpeed;
-        }
-        else if (staminaController.IsOverexhausted)
-        {
-            // Stamina leeg maar shift nog ingedrukt: sneller dan lopen, trager dan sprinten
-            speed = Mathf.Lerp(moveSpeed, sprintSpeed, staminaController.OverexhaustedSpeedFraction);
-        }
-        else
-        {
-            speed = moveSpeed;
-        }
+        bool canSprint = isSprinting && (staminaController == null || !staminaController.IsExhausted);
+        speed = canSprint ? sprintSpeed : moveSpeed;
 
         Vector3 horizontal = worldDirection.normalized * speed + knockbackVelocity;
         rb.linearVelocity = new Vector3(horizontal.x, rb.linearVelocity.y, horizontal.z);
@@ -166,6 +153,10 @@ public class PlayerController : MonoBehaviour
 
         jumpRequested = false;
 
+        // Geen springen als stamina leeg is
+        if (staminaController != null && staminaController.IsExhausted)
+            return;
+
         float yVelocity = rb.linearVelocity.y;
 
         if (yVelocity < minJumpVelocity || yVelocity > maxJumpVelocity)
@@ -173,6 +164,8 @@ public class PlayerController : MonoBehaviour
 
         rb.linearVelocity = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);
         rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
+
+        staminaController?.DrainStaminaForJump();
     }
 
     private void HandleRotation()
