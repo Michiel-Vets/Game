@@ -7,6 +7,7 @@ public class PlayerController : MonoBehaviour
 {
     [Header("References")]
     [SerializeField] private HealthController healthController;
+    [SerializeField] private StaminaController staminaController;
     [SerializeField] private CameraLook cameraLook;
     [SerializeField] private FlashlightController flashlightController;
 
@@ -73,6 +74,7 @@ public class PlayerController : MonoBehaviour
         HandleJumpKeyboardFallback();
         HandleFlashlightKeyboardFallback();
         HandleDebugHealthInput();
+        UpdateStamina();
     }
 
     private void FixedUpdate()
@@ -135,10 +137,25 @@ public class PlayerController : MonoBehaviour
     private void HandleMovement()
     {
         Vector3 worldDirection = transform.TransformDirection(new Vector3(moveInput.x, 0f, moveInput.y));
-        float speed = isSprinting ? sprintSpeed : moveSpeed;
+
+        float speed;
+        if (staminaController == null || !staminaController.IsExhausted)
+        {
+            // Normaal of sprint
+            bool canSprint = isSprinting && (staminaController == null || !staminaController.IsExhausted);
+            speed = canSprint ? sprintSpeed : moveSpeed;
+        }
+        else if (staminaController.IsOverexhausted)
+        {
+            // Stamina leeg maar shift nog ingedrukt: sneller dan lopen, trager dan sprinten
+            speed = Mathf.Lerp(moveSpeed, sprintSpeed, staminaController.OverexhaustedSpeedFraction);
+        }
+        else
+        {
+            speed = moveSpeed;
+        }
 
         Vector3 horizontal = worldDirection.normalized * speed + knockbackVelocity;
-
         rb.linearVelocity = new Vector3(horizontal.x, rb.linearVelocity.y, horizontal.z);
     }
 
@@ -168,6 +185,27 @@ public class PlayerController : MonoBehaviour
     {
         knockbackVelocity = Vector3.Lerp(knockbackVelocity, Vector3.zero, knockbackDecay * Time.fixedDeltaTime);
     }
+
+    private void UpdateStamina()
+    {
+        if (staminaController == null)
+            return;
+
+        staminaController.SetShiftHeld(isSprinting);
+
+        bool isActuallySprinting = isSprinting && !staminaController.IsExhausted
+                                   && moveInput.sqrMagnitude > 0.01f;
+
+        if (isActuallySprinting)
+            staminaController.DrainStamina(Time.deltaTime);
+        else
+            staminaController.RechargeStamina(Time.deltaTime);
+    }
+
+    /// <summary>
+    /// Stamina als fractie (0–1), doorgestuurd vanuit StaminaController.
+    /// </summary>
+    public float StaminaFraction => staminaController != null ? staminaController.StaminaFraction : 0f;
 
     private void HandleSprintKeyboardFallback()
     {

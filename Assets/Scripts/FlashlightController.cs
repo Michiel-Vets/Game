@@ -15,6 +15,12 @@ public class FlashlightController : MonoBehaviour
     [SerializeField] private LayerMask enemyLayers;
     [SerializeField] private LayerMask obstacleLayers;
 
+    [Header("Distance Falloff")]
+    [Tooltip("Afstand waarop de flashlight op volle kracht werkt (damage & slowdown).")]
+    [SerializeField] private float fullEffectDistance = 5f;
+    [Tooltip("Minimale effectiviteit op maximale afstand (0 = geen effect, 1 = geen falloff).")]
+    [SerializeField, Range(0f, 1f)] private float minEffectAtMaxDistance = 0.1f;
+
     public bool IsOn => isOn;
 
     private bool isOn;
@@ -69,7 +75,14 @@ public class FlashlightController : MonoBehaviour
             EnemyController enemy = hit.collider.GetComponentInParent<EnemyController>();
             if (enemy == null) continue;
 
-            enemy.ReceiveFlashlightHit();
+            // Bereken hoe ver de enemy van de flashlight-oorsprong verwijderd is
+            // en schaal schade + vertraging lineair af op afstand.
+            float hitDistance = Vector3.Distance(origin, hit.point);
+            float distanceFraction = Mathf.Clamp01(hitDistance / maxDistance);
+            float effectFactor = Mathf.Lerp(1f, minEffectAtMaxDistance,
+                Mathf.InverseLerp(fullEffectDistance / maxDistance, 1f, distanceFraction));
+
+            enemy.ReceiveFlashlightHit(effectFactor);
         }
     }
 

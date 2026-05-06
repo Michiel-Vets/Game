@@ -345,7 +345,7 @@ MonoBehaviour:
   obstacleLayers:
     serializedVersion: 2
     m_Bits: 1024
-  fullEffectDistance: 15
+  fullEffectDistance: 30
   minEffectAtMaxDistance: 0.302
 --- !u!1 &292620744
 GameObject:
@@ -2559,6 +2559,7 @@ MonoBehaviour:
   staminaDrainRate: 1
   staminaRechargeRate: 0.5
   rechargeThreshold: 0.25
+  overexhaustedSpeedFraction: 0.6
   staminaBar: {fileID: 49038351}
   fullWidth: 100
   barHeight: 100

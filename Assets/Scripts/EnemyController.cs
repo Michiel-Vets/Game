@@ -163,6 +163,14 @@ public class EnemyController : MonoBehaviour
     [Tooltip("Snelheid waarmee de scale verandert (zichtbaar krimpen/groeien).")]
     [SerializeField] private float scaleChangeSpeed = 2f;
 
+    [Header("Beam Evasion")]
+    [Tooltip("Hoe sterk de enemy zijwaarts uitwijkt als hij in de beam staat maar nog niet Weakened is.")]
+    [SerializeField] private float beamEvasionStrength = 6f;
+    [Tooltip("Afstand tot de rand van de beam waarbinnen de enemy probeert te ontwijken.")]
+    [SerializeField] private float beamEvasionRadius = 3f;
+    [Tooltip("Kans per frame dat de enemy een ontwijkrichting kiest (0 = nooit, 1 = altijd direct).")]
+    [SerializeField, Range(0f, 1f)] private float beamEvasionChance = 0.85f;
+
     [Header("Aggression Scaling (set on prefab, injected by spawner)")]
     [Tooltip("Minimum aggression floor at the very start of the game (0 = fully timid, 1 = fully reckless).")]
     [SerializeField, Range(0f, 1f)] private float aggressionAtStart = 0f;
@@ -288,6 +296,13 @@ public class EnemyController : MonoBehaviour
     private bool wasInFlashlightBeamLastFrame; // used for first-frame recoil detection
     private Vector3 originalScale;
 
+    // Flashlight effect factor this frame (1 = full, 0 = none) — set by ReceiveFlashlightHit
+    private float flashlightEffectFactor = 1f;
+
+    // Beam evasion — perpendicular dodge direction chosen when beam is first detected
+    private Vector3 beamEvasionDir;
+    private bool hasChosenEvasionDir;
+
     // Death animation
     private float deathTimer;
 
@@ -393,6 +408,8 @@ public class EnemyController : MonoBehaviour
         wasInFlashlightBeamLastFrame = isInFlashlightBeam;
         // Reset beam flag — flashlight must re-confirm every frame
         isInFlashlightBeam = false;
+        // Reset effect factor — will be set again next frame if still in beam
+        flashlightEffectFactor = 0f;
     }
 
     // ────────────────────────────────────────────────────────────────────────────
@@ -464,14 +481,16 @@ public class EnemyController : MonoBehaviour
 
     /// <summary>
     /// Called every frame by FlashlightController while its beam hits this enemy.
+    /// effectFactor (0–1) scales both damage and slowdown based on distance from the flashlight.
     /// On the first frame of contact a small recoil is applied.
     /// </summary>
-    public void ReceiveFlashlightHit()
+    public void ReceiveFlashlightHit(float effectFactor = 1f)
     {
         if (state == BehaviourState.Dying || state == BehaviourState.Fleeing)
             return;
 
         isInFlashlightBeam = true;
+        flashlightEffectFactor = Mathf.Max(flashlightEffectFactor, effectFactor);
 
         // First frame of contact: apply a soft recoil push away from the player
         if (!wasInFlashlightBeamLastFrame && playerTarget != null)
@@ -499,8 +518,8 @@ public class EnemyController : MonoBehaviour
 
         if (isInFlashlightBeam)
         {
-            // Schade opbouwen terwijl de zaklamp schijnt
-            flashlightDamage += dt / flashlightKillTime;
+            // Schade opbouwen terwijl de zaklamp schijnt — geschaald op afstand
+            flashlightDamage += (dt / flashlightKillTime) * flashlightEffectFactor;
             flashlightDamage = Mathf.Clamp01(flashlightDamage);
 
             // Ga naar Weakened zodra de beam raakt (recoil is al gezet in ReceiveFlashlightHit)
@@ -937,10 +956,24 @@ public class EnemyController : MonoBehaviour
         Vector3 obstacle = GetObstacleAvoidance(primary);
         Vector3 boundary = GetBoundaryPush();
 
-        return primary
+        Vector3 result = primary
             + sep * separationStrength
             + obstacle * avoidanceStrength
             + boundary * boundaryStrength;
+
+        // Actieve beam-ontwijking voor enemies die nog niet Weakened zijn:
+        // als de enemy in de beam zit tijdens Chase/Flank/Intercept probeert hij
+        // zijwaarts weg te sturen om de beam te verlaten.
+        if (isInFlashlightBeam
+            && state != BehaviourState.Weakened
+            && state != BehaviourState.Recoil
+            && Random.value <= beamEvasionChance)
+        {
+            Vector3 evasion = GetBeamEvasionVector(toPlayerFlat);
+            result += evasion * beamEvasionStrength;
+        }
+
+        return result;
     }
 
     private Vector3 GetPrimaryDirection(Vector3 toPlayerFlat, float distToPlayer)
@@ -986,13 +1019,41 @@ public class EnemyController : MonoBehaviour
     }
 
     /// <summary>
-    /// Weakened enemy always retreats from the player.
-    /// It heals while retreating — no minimum distance needed anymore.
+    /// Weakened enemy retreats from the player AND steers zijwaarts om uit de beam te komen.
+    /// Het heals while retreating — no minimum distance needed anymore.
     /// Once fully healed it transitions back to attack via UpdateFlashlightExposure.
     /// </summary>
     private Vector3 GetWeakenedDirection(Vector3 toPlayerFlat, float distToPlayer)
     {
-        return -toPlayerFlat;
+        Vector3 retreat = -toPlayerFlat;
+
+        // Voeg een zijwaartse component toe om actief uit de beam te sturen
+        Vector3 evasion = GetBeamEvasionVector(toPlayerFlat);
+        return (retreat + evasion * 0.6f).normalized;
+    }
+
+    /// <summary>
+    /// Berekent een zijwaartse ontwijkrichting loodrecht op de beam (richting speler).
+    /// De richting wordt eenmalig gekozen als de beam raakt en vastgehouden totdat
+    /// de enemy uit de beam is.
+    /// </summary>
+    private Vector3 GetBeamEvasionVector(Vector3 toPlayerFlat)
+    {
+        if (!isInFlashlightBeam)
+        {
+            hasChosenEvasionDir = false;
+            return Vector3.zero;
+        }
+
+        if (!hasChosenEvasionDir || beamEvasionDir == Vector3.zero)
+        {
+            // Kies willekeurig links of rechts loodrecht op de richting naar de speler
+            Vector3 perp = Vector3.Cross(toPlayerFlat, Vector3.up);
+            beamEvasionDir = (Random.value < 0.5f ? perp : -perp).normalized;
+            hasChosenEvasionDir = true;
+        }
+
+        return beamEvasionDir;
     }
 
     // ────────────────────────────────────────────────────────────────────────────
@@ -1066,8 +1127,10 @@ public class EnemyController : MonoBehaviour
     {
         if (state == BehaviourState.Weakened)
         {
-            // Hoe meer schade, hoe trager — bij vol schade bijna stilstaand
-            float speedFraction = 1f - (flashlightDamage * 0.85f);
+            // Hoe meer schade én hoe dichter bij de beam, hoe trager.
+            // effectFactor (0–1) schaalt hoe sterk de vertraging is op afstand.
+            float slowFraction = flashlightDamage * 0.85f * flashlightEffectFactor;
+            float speedFraction = 1f - slowFraction;
             return weakenedSpeed * speedFraction;
         }
         if (state == BehaviourState.Fleeing) return fleeSpeed;

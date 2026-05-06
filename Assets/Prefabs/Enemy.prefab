@@ -183,6 +183,10 @@ MonoBehaviour:
   avoidanceDistance: 4
   avoidanceRadius: 0.5
   avoidanceStrength: 5
+  obstacleScanDistance: 6
+  obstacleOvershootHeight: 1.2
+  obstacleLiftSpeed: 6
+  obstacleScanRadius: 0.6
   boundaryLookAhead: 3
   boundaryStrength: 6
   heightChangeInterval: 3
@@ -193,8 +197,14 @@ MonoBehaviour:
   fatigueStartTime: 30
   fatigueDuration: 10
   fatigueMinMultiplier: 0.7
-  recoilForce: 6
-  recoilDuration: 0.35
+  recoilForce: 12
+  recoilDuration: 1
+  deathLaunchSpeed: 16
+  deathSpinSpeed: 360
+  deathRiseDuration: 1.8
+  weakenedMinScaleFraction: 0.3
+  weakenedMinFloatHeight: 0.15
+  weakenedFallSpeed: 6
   attackDistance: 2.2
   damagePercentage: 0.1
   knockbackForce: 12
@@ -202,10 +212,14 @@ MonoBehaviour:
   fleeSpeed: 8
   fleeDuration: 2.5
   weakenedSpeed: 2
-  weakenedDuration: 6
   weakenedRetreatDistance: 12
-  flashlightKillTime: 2
-  dissolveSpeed: 1.5
+  flashlightKillTime: 1.5
+  healTime: 5
+  partialHealTimeMultiplier: 2.5
+  scaleChangeSpeed: 2
+  beamEvasionStrength: 6
+  beamEvasionRadius: 3
+  beamEvasionChance: 0.85
   aggressionAtStart: 0
   aggressionAtEnd: 0.7
   aggressionRampDuration: 600
@@ -217,6 +231,10 @@ MonoBehaviour:
   lungeDistanceMultiplierMax: 1.8
   lungeSpeedMultiplierMin: 0.8
   lungeSpeedMultiplierMax: 1.4
+  scaleAtMinAggression: 1.5
+  scaleAtMaxAggression: 0.8
+  hpMultiplierMin: 2
+  hpMultiplierMax: 0.5
   crowdCheckInterval: 0.7
   crowdSpreadRadius: 8
   maxNearbyAttackersBeforeSpread: 5
@@ -225,6 +243,20 @@ MonoBehaviour:
   crowdSpreadMaxDuration: 8
   crowdSurroundRadius: 7
   crowdAngleJitter: 35
+  anticipationRampDuration: 120
+  interceptChanceMin: 0.05
+  interceptChanceMax: 0.45
+  interceptLookAheadMin: 0.3
+  interceptLookAheadMax: 1.2
+  maxLungeCooldownReduction: 0.6
+  sprintSpeedMultiplier: 1.8
+  maxSprintStamina: 3
+  staminaRechargeRate: 1
+  staminaDrainRate: 1
+  exhaustedSpeedMultiplier: 0.55
+  staminaRecoverThreshold: 0.5
+  chargeSprintDistance: 12
+  flankSprintChance: 0.6
 --- !u!136 &6467528723785307569
 CapsuleCollider:
   m_ObjectHideFlags: 0
