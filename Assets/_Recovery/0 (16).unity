@@ -1643,8 +1643,8 @@ MonoBehaviour:
   maxBattery: 100
   currentBattery: 0
   drainRate: 5
-  batteryFillImage: {fileID: 0}
-  fullColor: {r: 0.24, g: 0.72, b: 0.24, a: 1}
+  batteryFillImage: {fileID: 1694595314}
+  fullColor: {r: 1, g: 0.9899706, b: 0, a: 1}
   lowColor: {r: 0.9, g: 0.2, b: 0.2, a: 1}
 --- !u!1 &1375205856
 GameObject:
@@ -2117,11 +2117,11 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 0}
+  m_Sprite: {fileID: 10905, guid: 0000000000000000f000000000000000, type: 0}
   m_Type: 3
   m_PreserveAspect: 1
   m_FillCenter: 1
-  m_FillMethod: 0
+  m_FillMethod: 1
   m_FillAmount: 1
   m_FillClockwise: 1
   m_FillOrigin: 0
