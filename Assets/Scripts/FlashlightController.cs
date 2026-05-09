@@ -19,9 +19,7 @@ public class FlashlightController : MonoBehaviour
     [SerializeField] private LayerMask obstacleLayers;
 
     [Header("Distance Falloff")]
-    [Tooltip("Afstand waarop de flashlight op volle kracht werkt (damage & slowdown).")]
     [SerializeField] private float fullEffectDistance = 5f;
-    [Tooltip("Minimale effectiviteit op maximale afstand (0 = geen effect, 1 = geen falloff).")]
     [SerializeField, Range(0f, 1f)] private float minEffectAtMaxDistance = 0.1f;
 
     public bool IsOn => isOn;
@@ -88,8 +86,7 @@ public class FlashlightController : MonoBehaviour
             effectiveDistance = obstacleHit.distance;
         }
 
-        RaycastHit[] hits = Physics.SphereCastAll(
-            origin, hitRadius, direction, effectiveDistance, enemyLayers);
+        RaycastHit[] hits = Physics.SphereCastAll(origin, hitRadius, direction, effectiveDistance, enemyLayers);
 
         foreach (RaycastHit hit in hits)
         {

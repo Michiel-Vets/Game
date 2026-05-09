@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.UI;
 
 public class BatteryController : MonoBehaviour
 {
@@ -8,29 +9,41 @@ public class BatteryController : MonoBehaviour
     [SerializeField] private float drainRate = 5f;
 
     [Header("Battery Bar")]
-    [SerializeField] private RectTransform batteryBar;
-    [SerializeField] private float fullHeight = 200f;
-    [SerializeField] private float barWidth = 20f;
+    [SerializeField] private RectTransform batteryFillTransform;
+    [SerializeField] private Image batteryFillImage;
+    [SerializeField] private Color fullColor = new Color(0.24f, 0.72f, 0.24f, 1f);
+    [SerializeField] private Color lowColor = new Color(0.9f, 0.2f, 0.2f, 1f);
 
     public float MaxBattery => maxBattery;
     public float CurrentBattery => currentBattery;
     public bool HasBattery => currentBattery > 0f;
     public float BatteryFraction => currentBattery / maxBattery;
 
-    private void Awake()
+    private float parentHeight;
+    private float originalOffsetMinY;
+    private float originalOffsetMaxY;
+
+    private void Start()
     {
+        Canvas.ForceUpdateCanvases();
+
+        RectTransform parent = batteryFillTransform.parent as RectTransform;
+        parentHeight = parent.rect.height;
+
+        originalOffsetMinY = batteryFillTransform.offsetMin.y;
+        originalOffsetMaxY = batteryFillTransform.offsetMax.y;
+
+        batteryFillTransform.anchorMin = new Vector2(0f, 0f);
+        batteryFillTransform.anchorMax = new Vector2(1f, 1f);
+
         maxBattery = Mathf.Max(1f, maxBattery);
         currentBattery = maxBattery;
-
-        SetupBatteryBar();
         UpdateBatteryVisuals();
     }
 
     public void DrainBattery(float deltaTime)
     {
-        if (currentBattery <= 0f)
-            return;
-
+        if (currentBattery <= 0f) return;
         currentBattery = Mathf.Clamp(currentBattery - drainRate * deltaTime, 0f, maxBattery);
         UpdateBatteryVisuals();
     }
@@ -47,24 +60,16 @@ public class BatteryController : MonoBehaviour
         UpdateBatteryVisuals();
     }
 
-    private void SetupBatteryBar()
-    {
-        if (batteryBar == null)
-            return;
-
-        // Pivot onderaan zetten
-        batteryBar.pivot = new Vector2(0.5f, 0f);
-
-        // Anchors ook onderaan
-        batteryBar.anchorMin = new Vector2(0.5f, 0f);
-        batteryBar.anchorMax = new Vector2(0.5f, 0f);
-    }
-
     private void UpdateBatteryVisuals()
     {
-        if (batteryBar == null)
-            return;
+        if (batteryFillTransform != null)
+        {
+            Vector2 offsetMax = batteryFillTransform.offsetMax;
+            offsetMax.y = Mathf.Lerp(-(parentHeight - originalOffsetMinY), originalOffsetMaxY, BatteryFraction);
+            batteryFillTransform.offsetMax = offsetMax;
+        }
 
-        batteryBar.sizeDelta = new Vector2(barWidth, fullHeight * BatteryFraction);
+        if (batteryFillImage != null)
+            batteryFillImage.color = Color.Lerp(lowColor, fullColor, BatteryFraction);
     }
 }
