@@ -233,16 +233,38 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ee1159a569f25e547b6b244008d1c677, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GhostClothSetup
-  topRadius: 2
-  bottomRadius: 4
-  robeHeight: 8
-  columns: 14
-  rows: 14
-  stretchingStiffness: 0.85
-  bendingStiffness: 0.3
-  damping: 0.05
-  pinnedFraction: 0.18
+  topRadius: 4
+  shoulderRadius: 3
+  hemRadius: 10
+  robeHeight: 16
+  hoodExtension: 4.4
+  silhouettePower: 5
+  columns: 30
+  rows: 30
+  coneTopRadius: 0.2
+  coneTopY: 0
+  coneBottomRadius: 0.3
+  coneBottomY: -5
+  coneSegments: 5
+  stretchingStiffness: 0.5
+  bendingStiffness: 0.15
+  damping: 0.02
+  pinnedFraction: 0.12
+  maxClothDistance: 0.55
+  clothTimeScale: 0.15
+  swayStrength: 3
+  swaySpeed: 0.4
+  randomTurbulence: 0.5
+  dragStrength: 3
+  tiltStrength: 4
+  maxTiltAngle: 35
+  tiltSmoothing: 3
+  hoverAmplitude: 0.4
+  hoverSpeed: 0.25
+  hoverRotationStrength: 8
+  hoverRotationSpeed: 0.2
   ghostMaterial: {fileID: 2100000, guid: 4680809ff9c6e0e4fb626321a4727889, type: 2}
+  showHead: 0
 --- !u!1 &5797674448347770860
 GameObject:
   m_ObjectHideFlags: 0
