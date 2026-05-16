@@ -14,8 +14,6 @@ public class EnemyController : MonoBehaviour
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void ResetStatics() => formationCounter = 0;
 
-    // ── Inspector ────────────────────────────────────────────────────────────
-
     [Header("Movement")]
     [SerializeField] private float moveSpeed = 5f;
     [SerializeField] private float chaseSpeedMultiplier = 1.5f;
@@ -142,7 +140,6 @@ public class EnemyController : MonoBehaviour
 
     [Header("Aggression Scaling")]
     [SerializeField] private float aggressionSpreadDuration = 300f;
-
     [SerializeField] private float speedMultiplierMin = 0.4f;
     [SerializeField] private float speedMultiplierMax = 2.8f;
     [SerializeField] private float damageMultiplierMin = 2.5f;
@@ -189,6 +186,7 @@ public class EnemyController : MonoBehaviour
     private Rigidbody rb;
     private Transform playerTarget;
     private Transform playerCamera;
+    private GhostClothSetup ghostClothSetup;
 
     private BehaviourState state = BehaviourState.Inactive;
 
@@ -196,7 +194,6 @@ public class EnemyController : MonoBehaviour
     private float personalExtraFlyHeight;
     private bool likesClimbingEnemies;
     private float returnToGroundDistance;
-    // -1 = groot/traag/tank, 0 = medium (begin), 1 = klein/snel
     private float aggressionSpectrum = 0f;
 
     private float startDelay;
@@ -227,7 +224,7 @@ public class EnemyController : MonoBehaviour
     private bool wasInFlashlightBeamLastFrame;
     private Vector3 originalScale;
     private float flashlightEffectFactor = 1f;
-    private Vector3 flashlightBeamDirection; // richting van de zaklamp beam (genormaliseerd)
+    private Vector3 flashlightBeamDirection;
 
     private Vector3 beamEvasionDir;
     private bool hasChosenEvasionDir;
@@ -255,6 +252,8 @@ public class EnemyController : MonoBehaviour
         rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
         rb.interpolation = RigidbodyInterpolation.Interpolate;
 
+        ghostClothSetup = GetComponent<GhostClothSetup>();
+
         startDelay = Random.Range(0f, 2f);
         formationSlot = formationCounter % 8;
         formationCounter++;
@@ -264,7 +263,6 @@ public class EnemyController : MonoBehaviour
         likesClimbingEnemies = Random.value <= climbOverEnemyChance;
         returnToGroundDistance = Random.Range(2.5f, 7f);
 
-        // Alle geesten starten op 0 (medium). SetSurvivedTime spreidt dit over tijd.
         aggressionSpectrum = 0f;
 
         flankSide = Random.value < 0.5f ? 1f : -1f;
@@ -335,14 +333,10 @@ public class EnemyController : MonoBehaviour
     {
         gameTimeSurvived = survivedTime;
 
-        // spreadT gaat van 0 naar 1 over aggressionSpreadDuration seconden.
-        // Bij t=0: spectrum = 0 (medium). Bij t=1: spectrum = willekeurig tussen -1 en 1.
         float spreadT = aggressionSpreadDuration > 0f
             ? Mathf.Clamp01(survivedTime / aggressionSpreadDuration)
             : 1f;
 
-        // Kies een vaste doelwaarde per enemy (gebaseerd op formationSlot voor consistentie),
-        // dan lerp van 0 naar die doelwaarde naarmate het spel vordert.
         float targetSpectrum = Mathf.Lerp(-1f, 1f, (float)formationSlot / 7f)
             + Random.Range(-0.15f, 0.15f);
         targetSpectrum = Mathf.Clamp(targetSpectrum, -1f, 1f);
@@ -359,8 +353,6 @@ public class EnemyController : MonoBehaviour
 
     private void ApplyAggressionStats(float antT = 0f)
     {
-        // Remap spectrum (-1..1) naar t (0..1) voor alle Lerps.
-        // t=0 → groot/traag/tank, t=0.5 → medium, t=1 → klein/snel
         float t = (aggressionSpectrum + 1f) * 0.5f;
 
         moveSpeed *= Mathf.Lerp(speedMultiplierMin, speedMultiplierMax, t);
@@ -377,6 +369,9 @@ public class EnemyController : MonoBehaviour
 
         float cooldownReduction = maxLungeCooldownReduction * antT;
         lungeCooldownTimer.Reset(lungeCooldown * (1f - cooldownReduction));
+
+        // Vertel het cloth systeem dat de schaal eenmalig is veranderd.
+        ghostClothSetup?.NotifyScaleChanged();
     }
 
     public void TakeRecoil(Vector3 hitDirection)
@@ -399,7 +394,6 @@ public class EnemyController : MonoBehaviour
         isInFlashlightBeam = true;
         flashlightEffectFactor = Mathf.Max(flashlightEffectFactor, effectFactor);
 
-        // Sla de beam-richting op zodat de uitwijklogica loodrecht op de beam kan sturen.
         if (beamDirection != Vector3.zero)
             flashlightBeamDirection = beamDirection;
 
@@ -429,8 +423,6 @@ public class EnemyController : MonoBehaviour
         }
         else if (state == BehaviourState.Weakened && flashlightDamage > 0f)
         {
-            // Spectrum 1 (snel) herstelt snel zodat hij kan rushen zodra hij vrij is.
-            // Spectrum -1 (tank) herstelt traag — encasseert meer en blijft langer verzwakt.
             float spectrumHealMultiplier = Mathf.Lerp(3.5f, 0.5f, (aggressionSpectrum + 1f) * 0.5f);
             flashlightDamage -= dt / (healTime * partialHealTimeMultiplier * spectrumHealMultiplier);
             flashlightDamage = Mathf.Max(0f, flashlightDamage);
@@ -452,15 +444,19 @@ public class EnemyController : MonoBehaviour
         if (state == BehaviourState.Dying)
             return;
 
-        // Krimpt meteen zichtbaar zodra de beam raakt, ook bij lage damage.
         float visualDamage = isInFlashlightBeam
             ? Mathf.Max(flashlightDamage, 0.15f)
             : flashlightDamage;
 
         float scaleFraction = Mathf.Lerp(1f, weakenedMinScaleFraction, visualDamage);
         Vector3 targetScale = originalScale * scaleFraction;
+        Vector3 prevScale = transform.localScale;
         transform.localScale = Vector3.MoveTowards(
             transform.localScale, targetScale, scaleChangeSpeed * Time.fixedDeltaTime);
+
+        // Vertel het cloth systeem dat de schaal is veranderd zodat het jitter kan voorkomen.
+        if (transform.localScale != prevScale)
+            ghostClothSetup?.NotifyScaleChanged();
     }
 
     private void EnterWeakened()
@@ -838,9 +834,6 @@ public class EnemyController : MonoBehaviour
         Vector3 retreat = -toPlayerFlat;
         Vector3 evasion = GetBeamEvasionVector(toPlayerFlat);
 
-        // Spectrum 1 (snel): sterke zijwaartse vlucht om snel uit de beam te komen,
-        //   daarna op afstand blijven tot volledig hersteld.
-        // Spectrum -1 (tank): weinig zijwaartse uitwijking, blijft grotendeels staan.
         float evasionBlend = Mathf.Lerp(0.1f, 1.2f, (aggressionSpectrum + 1f) * 0.5f);
         return (retreat + evasion * evasionBlend).normalized;
     }
@@ -929,12 +922,9 @@ public class EnemyController : MonoBehaviour
     {
         if (state == BehaviourState.Weakened)
         {
-            // Dichterbij de bron = trager (effectFactor schaalt dit).
             float speedFraction = 1f - (flashlightEffectFactor * 0.9f);
             float baseWeakenedSpeed = weakenedSpeed * Mathf.Max(speedFraction, 0.1f);
 
-            // Spectrum 1 (snel/klein) vlucht tot 2× sneller uit de beam.
-            // Spectrum -1 (tank) vlucht tot 0.4× zo snel — hij encasseert liever.
             float spectrumMultiplier = Mathf.Lerp(0.4f, 2.0f, (aggressionSpectrum + 1f) * 0.5f);
             return baseWeakenedSpeed * spectrumMultiplier;
         }
@@ -1090,8 +1080,6 @@ public class EnemyController : MonoBehaviour
 
         hasHit = true;
 
-        // Damage and knockback scale with current size relative to original.
-        // An enemy shrunk by the flashlight hits for less.
         float sizeFraction = originalScale.x > 0f
             ? transform.localScale.x / originalScale.x
             : 1f;

@@ -52,6 +52,7 @@ public class GhostClothSetup : MonoBehaviour
     [SerializeField] private bool showHead = false;
 
     private Cloth _cloth;
+    private SkinnedMeshRenderer _smr;
     private Rigidbody _rb;
     private Transform _visualRoot;
 
@@ -91,7 +92,17 @@ public class GhostClothSetup : MonoBehaviour
         UpdateClothSway();
         UpdateHover();
         ApplyVisualTransform();
+        EnforceBounds();
     }
+
+    // ── Public API ───────────────────────────────────────────────────────────
+
+    public void NotifyScaleChanged()
+    {
+        _cloth?.ClearTransformMotion();
+    }
+
+    // ── Drag & tilt ──────────────────────────────────────────────────────────
 
     void UpdateMovementDrag()
     {
@@ -126,10 +137,11 @@ public class GhostClothSetup : MonoBehaviour
     {
         if (_cloth == null) return;
 
+        float worldScale = transform.localScale.x;
         float t = Time.time * swaySpeed;
-        float scale = clothTimeScale;
+        float scale = clothTimeScale * worldScale;
 
-        Vector3 gravity = Physics.gravity * scale;
+        Vector3 gravity = Physics.gravity * clothTimeScale;
         Vector3 worldDrag = transform.TransformDirection(_dragForce);
 
         _cloth.externalAcceleration = gravity + worldDrag + new Vector3(
@@ -156,6 +168,18 @@ public class GhostClothSetup : MonoBehaviour
         if (_visualRoot == null) return;
         _visualRoot.localPosition = _hoverOffset;
         _visualRoot.localRotation = _hoverRotation * _movementTilt;
+    }
+
+    void EnforceBounds()
+    {
+        if (_smr == null) return;
+        _smr.updateWhenOffscreen = true;
+        _smr.localBounds = new Bounds(
+            new Vector3(0f, (-robeHeight + hoodExtension) * 0.5f, 0f),
+            new Vector3(hemRadius * 2f + maxClothDistance * 2f,
+                        robeHeight + hoodExtension + maxClothDistance,
+                        hemRadius * 2f + maxClothDistance * 2f)
+        );
     }
 
     void HideExistingRenderers()
@@ -200,16 +224,16 @@ public class GhostClothSetup : MonoBehaviour
         mesh.boneWeights = weights;
         mesh.bindposes = new[] { bone.worldToLocalMatrix * robeGO.transform.localToWorldMatrix };
 
-        var smr = robeGO.AddComponent<SkinnedMeshRenderer>();
-        smr.bones = new[] { bone };
-        smr.rootBone = bone;
-        smr.sharedMesh = mesh;
+        _smr = robeGO.AddComponent<SkinnedMeshRenderer>();
+        _smr.bones = new[] { bone };
+        _smr.rootBone = bone;
+        _smr.sharedMesh = mesh;
 
         if (ghostMaterial != null)
         {
             var robeMat = new Material(ghostMaterial);
             robeMat.SetFloat("_Cull", 0f);
-            smr.sharedMaterial = robeMat;
+            _smr.sharedMaterial = robeMat;
         }
 
         _cloth = robeGO.AddComponent<Cloth>();
@@ -221,6 +245,14 @@ public class GhostClothSetup : MonoBehaviour
 
         ApplyConstraints(_cloth, mesh.vertices);
         SetupBodyColliders();
+
+        _smr.updateWhenOffscreen = true;
+        _smr.localBounds = new Bounds(
+            new Vector3(0f, (-robeHeight + hoodExtension) * 0.5f, 0f),
+            new Vector3(hemRadius * 2f + maxClothDistance * 2f,
+                        robeHeight + hoodExtension + maxClothDistance,
+                        hemRadius * 2f + maxClothDistance * 2f)
+        );
     }
 
     void SetupBodyColliders()

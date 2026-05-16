@@ -14,6 +14,10 @@ public class BatteryPickup : MonoBehaviour
     {
         startPosition = transform.position;
         mainCamera = Camera.main;
+
+        var mf = GetComponentInChildren<MeshFilter>();
+        if (mf != null && mf.mesh != null)
+            mf.mesh.bounds = new Bounds(Vector3.zero, Vector3.one * 50f);
     }
 
     private void Update()
