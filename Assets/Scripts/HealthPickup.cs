@@ -23,11 +23,11 @@ public class HealthPickup : MonoBehaviour
 
     private void OnTriggerEnter(Collider other)
     {
-        if (!other.CompareTag("Player") && other.GetComponentInParent<HealthController>() != null)
+        HealthController health = other.GetComponentInParent<HealthController>();
+        if (health == null || !health.CompareTag("Player"))
             return;
 
-        HealthController health = other.GetComponentInParent<HealthController>();
-        if (health == null)
+        if (health.HealthPercentage >= 1f)
             return;
 
         health.Heal(healAmount);

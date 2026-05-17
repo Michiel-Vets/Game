@@ -11,7 +11,7 @@ public class BatteryController : MonoBehaviour
     [Header("Battery Bar")]
     [SerializeField] private RectTransform batteryFillTransform;
     [SerializeField] private Image batteryFillImage;
-    [SerializeField] private Color fullColor = new Color(0.24f, 0.72f, 0.24f, 1f);
+    [SerializeField] private Color fullColor = new Color(1f, 1f, 0f, 1f);
     [SerializeField] private Color lowColor = new Color(0.9f, 0.2f, 0.2f, 1f);
 
     public float MaxBattery => maxBattery;

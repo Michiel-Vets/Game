@@ -8,10 +8,25 @@ public class BatteryPickup : MonoBehaviour
     [SerializeField] private float rotationSpeed = 90f;
 
     private Vector3 startPosition;
+    private BatteryController battery;
+
+    private void Awake()
+    {
+        Collider col = GetComponent<Collider>();
+        if (col != null) col.isTrigger = true;
+
+        Rigidbody rb = GetComponent<Rigidbody>();
+        if (rb != null)
+        {
+            rb.isKinematic = true;
+            rb.useGravity = false;
+        }
+    }
 
     private void Start()
     {
         startPosition = transform.position;
+        battery = FindObjectOfType<BatteryController>();
     }
 
     private void Update()
@@ -23,15 +38,10 @@ public class BatteryPickup : MonoBehaviour
 
     private void OnTriggerEnter(Collider other)
     {
-        if (!other.CompareTag("Player"))
+        if (other.GetComponentInParent<PlayerController>() == null)
             return;
 
-        GameObject player = GameObject.FindGameObjectWithTag("Player");
-        if (player == null)
-            return;
-
-        BatteryController battery = player.GetComponent<BatteryController>();
-        if (battery == null)
+        if (battery == null || battery.BatteryFraction >= 1f)
             return;
 
         battery.RechargeBattery(rechargeAmount);
