@@ -13,6 +13,7 @@ GameObject:
   - component: {fileID: 1071032898758912918}
   - component: {fileID: -2867810269426647493}
   - component: {fileID: 3858216066696507378}
+  - component: {fileID: 6147545830606105211}
   m_Layer: 9
   m_Name: Enemy
   m_TagString: Untagged
@@ -199,6 +200,8 @@ MonoBehaviour:
   chargeSprintDistance: 12
   flankSprintChance: 0.6
   visibilityFadeSpeed: 3
+  materializationRange: 8
+  materializationDuration: 2
 --- !u!136 &-2867810269426647493
 CapsuleCollider:
   m_ObjectHideFlags: 0
@@ -267,6 +270,18 @@ MonoBehaviour:
   hoverRotationSpeed: 0.2
   ghostMaterial: {fileID: 2100000, guid: 4680809ff9c6e0e4fb626321a4727889, type: 2}
   showHead: 0
+--- !u!114 &6147545830606105211
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3023488764070476685}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0f3d9ea14b7a2544b98d7f423f763265, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MistDisplacer
 --- !u!1 &5797674448347770860
 GameObject:
   m_ObjectHideFlags: 0

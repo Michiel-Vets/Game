@@ -3155,9 +3155,9 @@ MonoBehaviour:
   m_GameObject: {fileID: 2210930813662676648}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 0f3d9ea14b7a2544b98d7f423f763265, type: 3}
+  m_Script: {fileID: 11500000, guid: c9b7cefe922feb046a1ea3718d7838e7, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: '::'
+  m_EditorClassIdentifier: Assembly-CSharp::MistDisplacer
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

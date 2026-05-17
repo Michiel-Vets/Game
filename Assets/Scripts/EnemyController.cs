@@ -252,6 +252,7 @@ public class EnemyController : MonoBehaviour
     private float _currentVisibility = 0f;
     private float _materializationProgress = 0f;
     private Collider _mainCollider;
+    private Collider _playerCollider;
 
     // ── Unity lifecycle ──────────────────────────────────────────────────────
 
@@ -300,6 +301,8 @@ public class EnemyController : MonoBehaviour
     {
         if (!PlayerFinder.TryAssignIfNull(ref playerTarget))
             Debug.LogWarning("EnemyController: No player found.");
+        if (playerTarget != null)
+            _playerCollider = playerTarget.GetComponentInChildren<Collider>();
 
         Camera cam = Camera.main;
         if (cam != null)
@@ -504,13 +507,13 @@ public class EnemyController : MonoBehaviour
         float direction = shouldMaterialize ? 1f : -1f;
         _materializationProgress = Mathf.Clamp01(_materializationProgress + direction * dt / materializationDuration);
 
-        if (_mainCollider != null)
-            _mainCollider.enabled = _materializationProgress > 0f;
+        if (_mainCollider != null && _playerCollider != null)
+            Physics.IgnoreCollision(_mainCollider, _playerCollider, _materializationProgress == 0f);
     }
 
     private void UpdateVisibility()
     {
-        float effectiveTarget = Mathf.Max(_targetVisibility, flashlightDamage, _materializationProgress, 0.05f);
+        float effectiveTarget = Mathf.Max(_targetVisibility, flashlightDamage, _materializationProgress, 0.02f);
         _currentVisibility = Mathf.Lerp(_currentVisibility, effectiveTarget, Time.fixedDeltaTime * visibilityFadeSpeed);
         ghostClothSetup?.SetVisibility(_currentVisibility);
     }

@@ -194,51 +194,6 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 49038350}
   m_CullTransparentMesh: 1
---- !u!1 &222508922
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 222508924}
-  - component: {fileID: 222508923}
-  m_Layer: 0
-  m_Name: VolumetricMistController
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!114 &222508923
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 222508922}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f3592535bdea3c14dba46733006ee0c2, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::VolumetricMistController
-  fogMaterial: {fileID: 2100000, guid: f8309d28fa17a724fa927a8417d3f606, type: 2}
---- !u!4 &222508924
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 222508922}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &236473166
 GameObject:
   m_ObjectHideFlags: 0
@@ -2658,7 +2613,6 @@ GameObject:
   - component: {fileID: 7737689766861733513}
   - component: {fileID: 8274528773792328047}
   - component: {fileID: 8960576402157799646}
-  - component: {fileID: 8960576402157799647}
   m_Layer: 0
   m_Name: Player
   m_TagString: Player
@@ -3146,18 +3100,6 @@ MonoBehaviour:
   flashSpeed: 4
   flashColorA: {r: 0.5, g: 0.5, b: 0.5, a: 1}
   flashColorB: {r: 0.6, g: 0, b: 0, a: 1}
---- !u!114 &8960576402157799647
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2210930813662676648}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 0f3d9ea14b7a2544b98d7f423f763265, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: '::'
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
@@ -3173,4 +3115,3 @@ SceneRoots:
   - {fileID: 1754740106}
   - {fileID: 6199864359506246528}
   - {fileID: 1798911552}
-  - {fileID: 222508924}
