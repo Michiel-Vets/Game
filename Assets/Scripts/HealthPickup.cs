@@ -1,8 +1,8 @@
 using UnityEngine;
 
-public class BatteryPickup : MonoBehaviour
+public class HealthPickup : MonoBehaviour
 {
-    [SerializeField] private float rechargeAmount = 50f;
+    [SerializeField] private float healAmount = 25f;
     [SerializeField] private float bobHeight = 0.15f;
     [SerializeField] private float bobSpeed = 2f;
     [SerializeField] private float rotationSpeed = 90f;
@@ -23,18 +23,14 @@ public class BatteryPickup : MonoBehaviour
 
     private void OnTriggerEnter(Collider other)
     {
-        if (!other.CompareTag("Player"))
+        if (!other.CompareTag("Player") && other.GetComponentInParent<HealthController>() != null)
             return;
 
-        GameObject player = GameObject.FindGameObjectWithTag("Player");
-        if (player == null)
+        HealthController health = other.GetComponentInParent<HealthController>();
+        if (health == null)
             return;
 
-        BatteryController battery = player.GetComponent<BatteryController>();
-        if (battery == null)
-            return;
-
-        battery.RechargeBattery(rechargeAmount);
+        health.Heal(healAmount);
         Destroy(gameObject);
     }
 }
