@@ -81,7 +81,7 @@ MonoBehaviour:
   rotationSpeed: 8
   groundLayers:
     serializedVersion: 2
-    m_Bits: 0
+    m_Bits: 128
   preferredFloatHeight: 3
   maxFloatHeight: 10
   verticalSpeed: 4
@@ -117,12 +117,12 @@ MonoBehaviour:
   lungeCooldown: 40
   enemyLayers:
     serializedVersion: 2
-    m_Bits: 0
+    m_Bits: 512
   separationRadius: 2.5
   separationStrength: 3
   obstacleLayers:
     serializedVersion: 2
-    m_Bits: 0
+    m_Bits: 1024
   avoidanceDistance: 4
   avoidanceRadius: 0.5
   avoidanceStrength: 4
@@ -198,6 +198,7 @@ MonoBehaviour:
   staminaRecoverThreshold: 0.5
   chargeSprintDistance: 12
   flankSprintChance: 0.6
+  visibilityFadeSpeed: 3
 --- !u!136 &-2867810269426647493
 CapsuleCollider:
   m_ObjectHideFlags: 0
@@ -238,9 +239,10 @@ MonoBehaviour:
   hemRadius: 10
   robeHeight: 16
   hoodExtension: 4.4
-  silhouettePower: 5
   columns: 30
   rows: 30
+  ridgeCount: 6
+  ridgeDepth: 0.2
   coneTopRadius: 0.2
   coneTopY: 0
   coneBottomRadius: 0.3

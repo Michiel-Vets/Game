@@ -53,6 +53,7 @@ public class GhostClothSetup : MonoBehaviour
 
     private Cloth _cloth;
     private SkinnedMeshRenderer _smr;
+    private Color _baseColor;
     private Rigidbody _rb;
     private Transform _visualRoot;
 
@@ -100,6 +101,16 @@ public class GhostClothSetup : MonoBehaviour
     public void NotifyScaleChanged()
     {
         _cloth?.ClearTransformMotion();
+    }
+    public void SetVisibility(float alpha)
+    {
+        if (_smr == null) return;
+        Color c = _baseColor;
+        c.a = alpha;
+        if (_smr.material.HasProperty("_BaseColor"))
+            _smr.material.SetColor("_BaseColor", c);
+        else
+            _smr.material.SetColor("_Color", c);
     }
 
     // ── Drag & tilt ──────────────────────────────────────────────────────────
@@ -234,6 +245,10 @@ public class GhostClothSetup : MonoBehaviour
             var robeMat = new Material(ghostMaterial);
             robeMat.SetFloat("_Cull", 0f);
             _smr.sharedMaterial = robeMat;
+            _baseColor = robeMat.HasProperty("_BaseColor")
+            ? robeMat.GetColor("_BaseColor")
+            : robeMat.color;
+            SetVisibility(0f);
         }
 
         _cloth = robeGO.AddComponent<Cloth>();

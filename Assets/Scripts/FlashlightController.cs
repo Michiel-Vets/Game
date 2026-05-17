@@ -1,4 +1,5 @@
 using UnityEngine;
+using System.Collections.Generic;
 
 public class FlashlightController : MonoBehaviour
 {
@@ -25,6 +26,7 @@ public class FlashlightController : MonoBehaviour
     public bool IsOn => isOn;
 
     private bool isOn;
+    private HashSet<EnemyController> _litEnemies = new HashSet<EnemyController>();
 
     void Awake()
     {
@@ -72,6 +74,13 @@ public class FlashlightController : MonoBehaviour
     {
         if (flashlight != null)
             flashlight.enabled = isOn;
+
+        if (!isOn)
+        {
+            foreach (var enemy in _litEnemies)
+                enemy.SetTargetVisibility(0f);
+            _litEnemies.Clear();
+        }
     }
 
     private void HandleBeam()
@@ -87,6 +96,9 @@ public class FlashlightController : MonoBehaviour
         }
 
         RaycastHit[] hits = Physics.SphereCastAll(origin, hitRadius, direction, effectiveDistance, enemyLayers);
+        HashSet<EnemyController> litThisFrame = new HashSet<EnemyController>();
+
+        float halfSpotAngle = flashlight != null ? flashlight.spotAngle * 0.5f : 30f;
 
         foreach (RaycastHit hit in hits)
         {
@@ -98,8 +110,21 @@ public class FlashlightController : MonoBehaviour
             float effectFactor = Mathf.Lerp(1f, minEffectAtMaxDistance,
                 Mathf.InverseLerp(fullEffectDistance / maxDistance, 1f, distanceFraction));
 
+            Vector3 dirToEnemy = (hit.collider.transform.position - origin).normalized;
+            float angle = Vector3.Angle(direction, dirToEnemy);
+            float angleVis = Mathf.Clamp01(1f - (angle / halfSpotAngle));
+            float visibility = angleVis * effectFactor;
+
+            enemy.SetTargetVisibility(visibility);
             enemy.ReceiveFlashlightHit(effectFactor);
+            litThisFrame.Add(enemy);
         }
+
+        foreach (var enemy in _litEnemies)
+            if (!litThisFrame.Contains(enemy))
+                enemy.SetTargetVisibility(0f);
+
+        _litEnemies = litThisFrame;
     }
 
     private void OnDrawGizmosSelected()

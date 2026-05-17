@@ -181,6 +181,13 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private float chargeSprintDistance = 12f;
     [SerializeField, Range(0f, 1f)] private float flankSprintChance = 0.6f;
 
+    [Header("Visibility")]
+    [SerializeField] private float visibilityFadeSpeed = 3f;
+
+    [Header("Attack Materialization")]
+    [SerializeField] private float materializationRange = 8f;
+    [SerializeField] private float materializationDuration = 2f;
+
     // ── Runtime state ────────────────────────────────────────────────────────
 
     private Rigidbody rb;
@@ -241,6 +248,11 @@ public class EnemyController : MonoBehaviour
     private bool isSprinting;
     private bool isExhausted;
 
+    private float _targetVisibility = 0f;
+    private float _currentVisibility = 0f;
+    private float _materializationProgress = 0f;
+    private Collider _mainCollider;
+
     // ── Unity lifecycle ──────────────────────────────────────────────────────
 
     private void Awake()
@@ -253,6 +265,8 @@ public class EnemyController : MonoBehaviour
         rb.interpolation = RigidbodyInterpolation.Interpolate;
 
         ghostClothSetup = GetComponent<GhostClothSetup>();
+
+        _mainCollider = GetComponent<Collider>();
 
         startDelay = Random.Range(0f, 2f);
         formationSlot = formationCounter % 8;
@@ -279,6 +293,7 @@ public class EnemyController : MonoBehaviour
 
         effectiveInterceptChance = interceptChanceMin;
         effectiveInterceptLookAhead = interceptLookAheadMin;
+
     }
 
     private void Start()
@@ -304,6 +319,8 @@ public class EnemyController : MonoBehaviour
         lungeCooldownTimer.Tick(dt);
 
         UpdateFlashlightExposure(dt);
+        UpdateMaterialization(dt);
+        UpdateVisibility();
 
         heightTimer -= dt;
         if (heightTimer <= 0f)
@@ -382,6 +399,12 @@ public class EnemyController : MonoBehaviour
         recoilDir = new Vector3(-hitDirection.x, 0f, -hitDirection.z).normalized;
         recoilTimer = recoilDuration;
         state = BehaviourState.Recoil;
+    }
+
+    public void SetTargetVisibility(float visibility)
+    {
+        _targetVisibility = visibility;
+        Debug.Log($"[Ghost] SetTargetVisibility aangeroepen: {visibility}");
     }
 
     // ── Flashlight ───────────────────────────────────────────────────────────
@@ -470,6 +493,26 @@ public class EnemyController : MonoBehaviour
         state = BehaviourState.Dying;
         deathTimer = deathRiseDuration;
         rb.linearVelocity = Vector3.zero;
+    }
+
+    private void UpdateMaterialization(float dt)
+    {
+        bool shouldMaterialize = playerTarget != null
+            && (state == BehaviourState.Chase || state == BehaviourState.Lunge)
+            && Vector3.Distance(transform.position, playerTarget.position) <= materializationRange;
+
+        float direction = shouldMaterialize ? 1f : -1f;
+        _materializationProgress = Mathf.Clamp01(_materializationProgress + direction * dt / materializationDuration);
+
+        if (_mainCollider != null)
+            _mainCollider.enabled = _materializationProgress > 0f;
+    }
+
+    private void UpdateVisibility()
+    {
+        float effectiveTarget = Mathf.Max(_targetVisibility, flashlightDamage, _materializationProgress, 0.05f);
+        _currentVisibility = Mathf.Lerp(_currentVisibility, effectiveTarget, Time.fixedDeltaTime * visibilityFadeSpeed);
+        ghostClothSetup?.SetVisibility(_currentVisibility);
     }
 
     // ── Sprint / stamina ─────────────────────────────────────────────────────
@@ -749,6 +792,8 @@ public class EnemyController : MonoBehaviour
         steering.y = 0f;
 
         float targetSpeed = GetTargetSpeed(distToPlayer);
+        if (_materializationProgress > 0f && _materializationProgress < 1f)
+            targetSpeed *= 0.5f;
         Vector3 targetVelocity = steering.sqrMagnitude > 0.01f
             ? steering.normalized * targetSpeed
             : Vector3.zero;
@@ -1074,6 +1119,7 @@ public class EnemyController : MonoBehaviour
     private void OnCollisionEnter(Collision collision)
     {
         if (hasHit) return;
+        if (_materializationProgress < 0.75f) return;
 
         HealthController health = collision.gameObject.GetComponentInParent<HealthController>();
         if (health == null || !health.CompareTag("Player")) return;
