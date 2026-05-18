@@ -15,8 +15,6 @@ Shader "Custom/VolumetricFog"
         _FogHeight("Fog height", float) = 6
         _FloorY("Floor Y", float) = 0
         _HeightPower("Height power", Range(0.5, 4)) = 2
-        _DisplacementRadius("Displacement radius", float) = 2.5
-        _DisplacementSharpness("Displacement sharpness", Range(1, 4)) = 2
     }
 
     SubShader
@@ -36,26 +34,29 @@ Shader "Custom/VolumetricFog"
             #include "Packages/com.unity.render-pipelines.core/Runtime/Utilities/Blit.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
 
-            float4 _Color;
-            float  _MaxDistance;
-            float  _DensityMultiplier;
-            float  _StepSize;
-            float  _NoiseOffset;
-            float  _DensityThreshold;
-            float  _NoiseTiling;
-            float4 _LightContribution;
-            float  _LightScattering;
-            float  _FogHeight;
-            float  _FloorY;
-            float  _HeightPower;
-            float  _DisplacementRadius;
-            float  _DisplacementSharpness;
+            CBUFFER_START(UnityPerMaterial)
+                float4 _Color;
+                float  _MaxDistance;
+                float  _DensityMultiplier;
+                float  _StepSize;
+                float  _NoiseOffset;
+                float  _DensityThreshold;
+                float  _NoiseTiling;
+                float4 _LightContribution;
+                float  _LightScattering;
+                float  _FogHeight;
+                float  _FloorY;
+                float  _HeightPower;
+            CBUFFER_END
 
             TEXTURE3D(_FogNoise);
             SAMPLER(sampler_FogNoise);
 
-            float4 _DisplacerPositions[16];
-            float  _DisplacerCount;
+            TEXTURE2D(_MistTrailMap);
+            SAMPLER(sampler_MistTrailMap);
+            float _MistTrailWorldSize;
+            float _MistTrailOriginX;
+            float _MistTrailOriginZ;
 
             float henyey_greenstein(float cosAngle, float scattering)
             {
@@ -64,25 +65,26 @@ Shader "Custom/VolumetricFog"
             }
 
             float get_density(float3 worldPos)
-{
-    float height = worldPos.y - _FloorY;
-    if (height < 0 || height > _FogHeight) return 0;
+            {
+                float height = worldPos.y - _FloorY;
+                if (height < 0 || height > _FogHeight) return 0;
 
-    float heightT       = saturate(height / _FogHeight);
-    float heightFalloff = pow(1.0 - heightT, _HeightPower);
-    if (heightFalloff < 0.001) return 0;
+                float heightT       = saturate(height / _FogHeight);
+                float heightFalloff = pow(1.0 - heightT, _HeightPower);
+                if (heightFalloff < 0.001) return 0;
 
-    float4 noise   = _FogNoise.SampleLevel(sampler_FogNoise, worldPos * 0.01 * _NoiseTiling, 0);
-    float  density = saturate(dot(noise, noise) - _DensityThreshold) * _DensityMultiplier * heightFalloff;
+                float4 noise   = _FogNoise.SampleLevel(sampler_FogNoise, worldPos * 0.01 * _NoiseTiling, 0);
+                float  density = saturate(dot(noise, noise) - _DensityThreshold) * _DensityMultiplier * heightFalloff;
 
-    // TEST: grote wijking rond camera (geen data nodig)
-    float2 camDiff = float2(worldPos.x - _WorldSpaceCameraPos.x,
-                            worldPos.z - _WorldSpaceCameraPos.z);
-    float camDist = length(camDiff);
-    density *= saturate(camDist / 15.0);
+                float2 trailUV = float2(
+                    (worldPos.x - _MistTrailOriginX) / _MistTrailWorldSize,
+                    (worldPos.z - _MistTrailOriginZ) / _MistTrailWorldSize
+                );
+                float trail = SAMPLE_TEXTURE2D_LOD(_MistTrailMap, sampler_MistTrailMap, trailUV, 0).r;
+                density *= trail;
 
-    return density;
-}
+                return density;
+            }
 
             half4 frag(Varyings IN) : SV_Target
             {
@@ -108,13 +110,11 @@ Shader "Custom/VolumetricFog"
 
                     if (density > 0)
                     {
-                        // Hoofdlicht (zon/maan)
                         Light mainLight = GetMainLight(TransformWorldToShadowCoord(rayPos));
-                        float mainPhase = henyey_greenstein(dot(rayDir, mainLight.direction), _LightScattering);
                         fogCol.rgb += mainLight.color * _LightContribution.rgb
-                            * mainPhase * density * mainLight.shadowAttenuation * _StepSize;
+                            * henyey_greenstein(dot(rayDir, mainLight.direction), _LightScattering)
+                            * density * mainLight.shadowAttenuation * _StepSize;
 
-                        // Zaklamp en andere lichten
                         #if defined(_ADDITIONAL_LIGHTS)
                         uint lightCount = GetAdditionalLightsCount();
                         for (uint i = 0; i < lightCount; i++)
@@ -122,9 +122,9 @@ Shader "Custom/VolumetricFog"
                             Light addLight = GetAdditionalLight(i, rayPos);
                             if (addLight.distanceAttenuation > 0.001)
                             {
-                                float addPhase = henyey_greenstein(dot(rayDir, addLight.direction), _LightScattering);
                                 fogCol.rgb += addLight.color * _LightContribution.rgb
-                                    * addPhase * density * addLight.distanceAttenuation * _StepSize * 3.0;
+                                    * henyey_greenstein(dot(rayDir, addLight.direction), _LightScattering)
+                                    * density * addLight.distanceAttenuation * _StepSize * 3.0;
                             }
                         }
                         #endif
