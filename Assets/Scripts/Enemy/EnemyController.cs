@@ -184,9 +184,6 @@ public class EnemyController : MonoBehaviour
     [Header("Visibility")]
     [SerializeField] private float visibilityFadeSpeed = 3f;
     [SerializeField, Range(0f, 1f)] private float baseVisibility = 0.02f;
-    [SerializeField] private float enemyVisibilityDistance = 20f;
-
-
 
     [Header("Attack Materialization")]
     [SerializeField] private float materializationRange = 8f;
@@ -270,8 +267,10 @@ public class EnemyController : MonoBehaviour
         rb.interpolation = RigidbodyInterpolation.Interpolate;
 
         ghostClothSetup = GetComponent<GhostClothSetup>();
-
         _mainCollider = GetComponent<Collider>();
+
+        moveSpeed *= DifficultySettings.EnemySpeedMultiplier;
+        flashlightKillTime *= DifficultySettings.EnemyHealthMultiplier;
 
         startDelay = Random.Range(0f, 2f);
         formationSlot = formationCounter % 8;
@@ -298,7 +297,6 @@ public class EnemyController : MonoBehaviour
 
         effectiveInterceptChance = interceptChanceMin;
         effectiveInterceptLookAhead = interceptLookAheadMin;
-
     }
 
     private void Start()
@@ -394,7 +392,6 @@ public class EnemyController : MonoBehaviour
         float cooldownReduction = maxLungeCooldownReduction * antT;
         lungeCooldownTimer.Reset(lungeCooldown * (1f - cooldownReduction));
 
-        // Vertel het cloth systeem dat de schaal eenmalig is veranderd.
         ghostClothSetup?.NotifyScaleChanged();
     }
 
@@ -484,7 +481,6 @@ public class EnemyController : MonoBehaviour
         transform.localScale = Vector3.MoveTowards(
             transform.localScale, targetScale, scaleChangeSpeed * Time.fixedDeltaTime);
 
-        // Vertel het cloth systeem dat de schaal is veranderd zodat het jitter kan voorkomen.
         if (transform.localScale != prevScale)
             ghostClothSetup?.NotifyScaleChanged();
     }
@@ -519,13 +515,7 @@ public class EnemyController : MonoBehaviour
     {
         float effectiveTarget = Mathf.Max(_targetVisibility, flashlightDamage, _materializationProgress, baseVisibility);
         _currentVisibility = Mathf.Lerp(_currentVisibility, effectiveTarget, Time.fixedDeltaTime * visibilityFadeSpeed);
-
-        float dist = playerTarget != null
-            ? Vector3.Distance(transform.position, playerTarget.position)
-            : 0f;
-        float distanceFactor = Mathf.Clamp01(1f - (dist / enemyVisibilityDistance));
-
-        ghostClothSetup?.SetVisibility(_currentVisibility * distanceFactor);
+        ghostClothSetup?.SetVisibility(_currentVisibility);
     }
 
     // ── Sprint / stamina ─────────────────────────────────────────────────────

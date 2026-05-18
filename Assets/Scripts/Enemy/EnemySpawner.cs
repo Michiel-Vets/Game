@@ -39,11 +39,20 @@ public class EnemySpawner : MonoBehaviour
     private void Start()
     {
         PlayerFinder.TryAssignIfNull(ref player);
+        DifficultySettings.Load();
+        ApplyDifficulty();
 
         if (enemyPrefab == null)
             Debug.LogError("EnemySpawner: Enemy Prefab is not assigned.");
 
         BakeEdgePoints();
+    }
+
+    private void ApplyDifficulty()
+    {
+        startSpawnInterval *= DifficultySettings.SpawnIntervalMultiplier;
+        minimumSpawnInterval *= DifficultySettings.SpawnIntervalMultiplier;
+        startMaxEnemiesAlive = Mathf.Max(1, startMaxEnemiesAlive + DifficultySettings.MaxEnemiesBonus);
     }
 
     private void Update()
@@ -65,9 +74,6 @@ public class EnemySpawner : MonoBehaviour
         }
     }
 
-    // Bake a list of ground-edge positions once at startup.
-    // Strategy: for each angle, march outward from the map center
-    // until the ground disappears, then step back one unit.
     private void BakeEdgePoints()
     {
         edgePoints.Clear();
@@ -95,7 +101,6 @@ public class EnemySpawner : MonoBehaviour
                 }
                 else
                 {
-                    // Ground ended — step back slightly to stay on the edge
                     if (foundAny)
                     {
                         Vector3 edgePoint = lastValidPoint - dir * edgeInsetDistance;
@@ -105,7 +110,6 @@ public class EnemySpawner : MonoBehaviour
                 }
             }
 
-            // If ground went all the way to the scan radius, use the last valid point
             if (foundAny && edgePoints.Count == i)
                 edgePoints.Add(lastValidPoint + Vector3.up * spawnYOffset);
         }
@@ -157,8 +161,6 @@ public class EnemySpawner : MonoBehaviour
             return false;
         }
 
-        // Try a few random edge points, pick one furthest from the player
-        // so enemies don't spawn directly on top of the player
         int tries = Mathf.Min(5, edgePoints.Count);
         Vector3 best = edgePoints[Random.Range(0, edgePoints.Count)];
         float bestDist = Vector3.Distance(best, player.position);
