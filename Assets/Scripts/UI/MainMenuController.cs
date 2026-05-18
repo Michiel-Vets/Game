@@ -1,7 +1,8 @@
 using UnityEngine;
 using UnityEngine.UI;
-using UnityEngine.SceneManagement;
+using UnityEngine.InputSystem;
 
+[DefaultExecutionOrder(100)]
 public class MainMenuController : MonoBehaviour
 {
     [Header("Panels")]
@@ -14,8 +15,9 @@ public class MainMenuController : MonoBehaviour
     [SerializeField] private Button normalButton;
     [SerializeField] private Button hardButton;
 
-    [Header("Scene")]
-    [SerializeField] private int gameSceneIndex = 1;
+    [Header("Player References")]
+    [SerializeField] private PlayerController playerController;
+    [SerializeField] private PlayerInput playerInput;
 
     private readonly Color selectedColor = new Color(0.25f, 0.80f, 0.35f);
     private readonly Color defaultColor = Color.white;
@@ -23,6 +25,13 @@ public class MainMenuController : MonoBehaviour
     private void Start()
     {
         DifficultySettings.Load();
+
+        if (playerController == null)
+            playerController = FindObjectOfType<PlayerController>();
+        if (playerInput == null)
+            playerInput = FindObjectOfType<PlayerInput>();
+
+        DisablePlayer();
 
         bool fullscreen = PlayerPrefs.GetInt("Fullscreen", Screen.fullScreen ? 1 : 0) == 1;
         Screen.fullScreen = fullscreen;
@@ -37,10 +46,18 @@ public class MainMenuController : MonoBehaviour
         RefreshDifficultyVisuals();
     }
 
-    public void StartGame() => SceneManager.LoadScene(gameSceneIndex);
+    public void StartGame()
+    {
+        mainPanel.SetActive(false);
+        settingsPanel.SetActive(false);
+        EnablePlayer();
+    }
 
     public void OpenSettings()
     {
+        Debug.Log("OpenSettings aangeroepen");
+        Debug.Log("mainPanel: " + mainPanel);
+        Debug.Log("settingsPanel: " + settingsPanel);
         mainPanel.SetActive(false);
         settingsPanel.SetActive(true);
     }
@@ -66,6 +83,30 @@ public class MainMenuController : MonoBehaviour
         settingsPanel.SetActive(false);
     }
 
+    private void DisablePlayer()
+    {
+        if (playerInput != null)
+            playerInput.enabled = false;
+
+        if (playerController != null)
+            playerController.SetControlsEnabled(false);
+
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
+    }
+
+    private void EnablePlayer()
+    {
+        if (playerInput != null)
+            playerInput.enabled = true;
+
+        if (playerController != null)
+            playerController.SetControlsEnabled(true);
+
+        Cursor.lockState = CursorLockMode.Locked;
+        Cursor.visible = false;
+    }
+
     private void OnFullscreenChanged(bool value)
     {
         Screen.fullScreen = value;
@@ -82,8 +123,8 @@ public class MainMenuController : MonoBehaviour
 
     private void RefreshDifficultyVisuals()
     {
-        easyButton.image.color   = DifficultySettings.Current == DifficultyLevel.Easy   ? selectedColor : defaultColor;
+        easyButton.image.color = DifficultySettings.Current == DifficultyLevel.Easy ? selectedColor : defaultColor;
         normalButton.image.color = DifficultySettings.Current == DifficultyLevel.Normal ? selectedColor : defaultColor;
-        hardButton.image.color   = DifficultySettings.Current == DifficultyLevel.Hard   ? selectedColor : defaultColor;
+        hardButton.image.color = DifficultySettings.Current == DifficultyLevel.Hard ? selectedColor : defaultColor;
     }
 }
