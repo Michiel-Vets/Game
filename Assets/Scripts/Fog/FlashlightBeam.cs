@@ -5,8 +5,10 @@ using UnityEngine.Rendering;
 public class FlashlightBeam : MonoBehaviour
 {
     [SerializeField] private Material beamMaterial;
-    [SerializeField] private Color beamColor = new Color(1f, 0.85f, 0.5f, 0.15f);
-    [SerializeField] private int segments = 24;
+    [SerializeField] private Color beamColor = new Color(1f, 0.9f, 0.7f, 0.12f);
+    [SerializeField] private int segments = 32;
+    [SerializeField] private float tipAlpha = 0.0f;
+    [SerializeField] private float baseAlpha = 0.18f;
 
     private Light _light;
     private FlashlightController _controller;
@@ -35,7 +37,6 @@ public class FlashlightBeam : MonoBehaviour
         if (beamMaterial != null)
         {
             _mat = new Material(beamMaterial);
-            _mat.SetColor("_Color", beamColor);
             _meshRenderer.sharedMaterial = _mat;
         }
 
@@ -44,7 +45,6 @@ public class FlashlightBeam : MonoBehaviour
 
     private void Update()
     {
-        // Flikker mee met het echte licht (inclusief flicker-effect van FlashlightController)
         bool controllerOn = _controller != null ? _controller.IsOn : true;
         bool lightEnabled = _light != null && _light.enabled;
         _meshRenderer.enabled = controllerOn && lightEnabled;
@@ -66,38 +66,41 @@ public class FlashlightBeam : MonoBehaviour
         _meshFilter.sharedMesh = BuildCone(length, radius, segments);
     }
 
-    private static Mesh BuildCone(float length, float radius, int segs)
+    private Mesh BuildCone(float length, float radius, int segs)
     {
-        var verts = new Vector3[1 + segs + 1];
-        var uvs = new Vector2[1 + segs + 1];
+        int vertCount = 1 + segs + 1;
+        var verts = new Vector3[vertCount];
+        var uvs = new Vector2[vertCount];
+        var colors = new Color[vertCount];
 
-        // Punt van de kegel (zaklamp)
+        Color tipColor = new Color(beamColor.r, beamColor.g, beamColor.b, tipAlpha);
+        Color baseRimColor = new Color(beamColor.r, beamColor.g, beamColor.b, baseAlpha);
+        Color baseCenterColor = new Color(beamColor.r, beamColor.g, beamColor.b, baseAlpha * 0.3f);
+
         verts[0] = Vector3.zero;
         uvs[0] = new Vector2(0.5f, 0f);
+        colors[0] = tipColor;
 
-        // Ring aan de basis
         for (int i = 0; i < segs; i++)
         {
             float a = i * Mathf.PI * 2f / segs;
             verts[i + 1] = new Vector3(Mathf.Cos(a) * radius, Mathf.Sin(a) * radius, length);
             uvs[i + 1] = new Vector2((float)i / segs, 1f);
+            colors[i + 1] = baseRimColor;
         }
 
-        // Middelpunt basis
         verts[segs + 1] = new Vector3(0f, 0f, length);
         uvs[segs + 1] = new Vector2(0.5f, 1f);
+        colors[segs + 1] = baseCenterColor;
 
         var tris = new int[segs * 6];
         int idx = 0;
-
         for (int i = 0; i < segs; i++)
         {
             int next = (i + 1) % segs;
-            // Zijkant
             tris[idx++] = 0;
             tris[idx++] = i + 1;
             tris[idx++] = next + 1;
-            // Basis
             tris[idx++] = segs + 1;
             tris[idx++] = next + 1;
             tris[idx++] = i + 1;
@@ -107,6 +110,7 @@ public class FlashlightBeam : MonoBehaviour
         mesh.vertices = verts;
         mesh.uv = uvs;
         mesh.triangles = tris;
+        mesh.colors = colors;
         mesh.RecalculateNormals();
         mesh.RecalculateBounds();
         return mesh;

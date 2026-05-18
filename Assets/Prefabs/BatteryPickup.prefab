@@ -12,6 +12,7 @@ GameObject:
   - component: {fileID: 8110482049986570700}
   - component: {fileID: 2111558611328565123}
   - component: {fileID: 1687504861467450451}
+  - component: {fileID: -1548173037236937130}
   m_Layer: 0
   m_Name: BatteryPickup
   m_TagString: Untagged
@@ -49,7 +50,7 @@ MonoBehaviour:
   rechargeAmount: 50
   bobHeight: 0.15
   bobSpeed: 2
-  rotateSpeed: 90
+  rotationSpeed: 90
 --- !u!212 &2111558611328565123
 SpriteRenderer:
   serializedVersion: 2
@@ -130,3 +131,16 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 7.25, y: 3.44, z: 0.2}
   m_Center: {x: 0, y: 0, z: 0}
+--- !u!114 &-1548173037236937130
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4887252627349488371}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 17d8a168f02c23f4087b4c6a9bc88dcc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PickupVisibility
+  visibilityDistance: 40

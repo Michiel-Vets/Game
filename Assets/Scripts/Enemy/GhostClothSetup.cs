@@ -96,24 +96,27 @@ public class GhostClothSetup : MonoBehaviour
         EnforceBounds();
     }
 
-    // ── Public API ───────────────────────────────────────────────────────────
-
     public void NotifyScaleChanged()
     {
         _cloth?.ClearTransformMotion();
     }
+
     public void SetVisibility(float alpha)
     {
         if (_smr == null) return;
-        Color c = _baseColor;
-        c.a = alpha;
-        if (_smr.material.HasProperty("_BaseColor"))
-            _smr.material.SetColor("_BaseColor", c);
-        else
-            _smr.material.SetColor("_Color", c);
-    }
 
-    // ── Drag & tilt ──────────────────────────────────────────────────────────
+        _smr.enabled = alpha > 0.005f;
+
+        if (_smr.enabled)
+        {
+            Color c = _baseColor;
+            c.a = alpha;
+            if (_smr.material.HasProperty("_BaseColor"))
+                _smr.material.SetColor("_BaseColor", c);
+            else
+                _smr.material.SetColor("_Color", c);
+        }
+    }
 
     void UpdateMovementDrag()
     {
@@ -246,8 +249,8 @@ public class GhostClothSetup : MonoBehaviour
             robeMat.SetFloat("_Cull", 0f);
             _smr.sharedMaterial = robeMat;
             _baseColor = robeMat.HasProperty("_BaseColor")
-            ? robeMat.GetColor("_BaseColor")
-            : robeMat.color;
+                ? robeMat.GetColor("_BaseColor")
+                : robeMat.color;
             SetVisibility(0f);
         }
 

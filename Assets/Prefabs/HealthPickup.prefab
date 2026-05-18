@@ -12,6 +12,7 @@ GameObject:
   - component: {fileID: 5831623692890016448}
   - component: {fileID: 5871986031342308754}
   - component: {fileID: 1499220473494926656}
+  - component: {fileID: 2597626954332367109}
   m_Layer: 0
   m_Name: HealthPickup
   m_TagString: Untagged
@@ -130,3 +131,16 @@ MonoBehaviour:
   bobHeight: 0.15
   bobSpeed: 2
   rotationSpeed: 90
+--- !u!114 &2597626954332367109
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1667142545735112892}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 17d8a168f02c23f4087b4c6a9bc88dcc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PickupVisibility
+  visibilityDistance: 40

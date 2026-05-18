@@ -201,6 +201,7 @@ MonoBehaviour:
   flankSprintChance: 0.6
   visibilityFadeSpeed: 3
   baseVisibility: 0
+  enemyVisibilityDistance: 40
   materializationRange: 8
   materializationDuration: 2
 --- !u!136 &-2867810269426647493

@@ -2,19 +2,33 @@ Shader "Custom/VolumetricFog"
 {
     Properties
     {
-        _Color("Color", Color) = (0.8, 0.85, 0.95, 1)
-        _MaxDistance("Max distance", float) = 30
+        _Color("Fog color", Color) = (0.8, 0.85, 0.95, 1)
+        _MaxDistance("Max distance", Float) = 60
         _StepSize("Step size", Range(0.1, 5)) = 0.5
         _DensityMultiplier("Density multiplier", Range(0, 10)) = 0.7
-        _NoiseOffset("Noise offset", float) = 1
+        _NoiseOffset("Noise offset", Float) = 1
         _FogNoise("Fog noise", 3D) = "white" {}
-        _NoiseTiling("Noise tiling", float) = 1
+        _NoiseTiling("Noise tiling", Float) = 1
         _DensityThreshold("Density threshold", Range(0, 1)) = 0.4
         [HDR]_LightContribution("Light contribution", Color) = (1, 1, 1, 1)
         _LightScattering("Light scattering", Range(0, 1)) = 0.3
-        _FogHeight("Fog height", float) = 6
-        _FloorY("Floor Y", float) = 0
+        _FogHeight("Fog height", Float) = 6
+        _FloorY("Floor Y", Float) = 0
         _HeightPower("Height power", Range(0.5, 4)) = 2
+
+        [Header(Flashlight)]
+        [HDR]_FlashlightBeamColor("Flashlight beam color", Color) = (1, 0.9, 0.7, 1)
+        _FlashlightScatterStrength("Flashlight scatter strength", Range(0, 20)) = 6
+
+        [Header(Visibility Wall)]
+        _VisibilityDistance("Visibility distance", Float) = 20
+        _WallColor("Wall color", Color) = (0.55, 0.55, 0.6, 1)
+        _WallDensity("Wall density", Range(0, 10)) = 3
+
+        [Header(Ground Bounds)]
+        _GroundCenterX("Ground center X", Float) = 0
+        _GroundCenterZ("Ground center Z", Float) = 0
+        _GroundRadius("Ground radius", Float) = 145
     }
 
     SubShader
@@ -47,6 +61,14 @@ Shader "Custom/VolumetricFog"
                 float  _FogHeight;
                 float  _FloorY;
                 float  _HeightPower;
+                float4 _FlashlightBeamColor;
+                float  _FlashlightScatterStrength;
+                float  _VisibilityDistance;
+                float4 _WallColor;
+                float  _WallDensity;
+                float  _GroundCenterX;
+                float  _GroundCenterZ;
+                float  _GroundRadius;
             CBUFFER_END
 
             TEXTURE3D(_FogNoise);
@@ -58,33 +80,103 @@ Shader "Custom/VolumetricFog"
             float _MistTrailOriginX;
             float _MistTrailOriginZ;
 
+            float3 _FlashlightWorldPos;
+            float3 _FlashlightWorldDir;
+            float  _FlashlightCosHalfAngle;
+            float  _FlashlightRange;
+            float  _FlashlightEnabled;
+
+            // ── Helpers ──────────────────────────────────────────────────────
+
             float henyey_greenstein(float cosAngle, float scattering)
             {
                 float g2 = scattering * scattering;
                 return (1.0 - g2) / (4.0 * PI * pow(abs(1.0 + g2 - 2.0 * scattering * cosAngle), 1.5));
             }
 
-            float get_density(float3 worldPos)
+            float flashlight_contribution(float3 worldPos)
             {
-                float height = worldPos.y - _FloorY;
-                if (height < 0 || height > _FogHeight) return 0;
-
-                float heightT       = saturate(height / _FogHeight);
-                float heightFalloff = pow(1.0 - heightT, _HeightPower);
-                if (heightFalloff < 0.001) return 0;
-
-                float4 noise   = _FogNoise.SampleLevel(sampler_FogNoise, worldPos * 0.01 * _NoiseTiling, 0);
-                float  density = saturate(dot(noise, noise) - _DensityThreshold) * _DensityMultiplier * heightFalloff;
-
-                float2 trailUV = float2(
-                    (worldPos.x - _MistTrailOriginX) / _MistTrailWorldSize,
-                    (worldPos.z - _MistTrailOriginZ) / _MistTrailWorldSize
-                );
-                float trail = SAMPLE_TEXTURE2D_LOD(_MistTrailMap, sampler_MistTrailMap, trailUV, 0).r;
-                density *= trail;
-
-                return density;
+                if (_FlashlightEnabled < 0.5) return 0;
+                float3 toPoint = worldPos - _FlashlightWorldPos;
+                float  dist    = length(toPoint);
+                if (dist < 0.01 || dist > _FlashlightRange) return 0;
+                float cosA = dot(toPoint / dist, _FlashlightWorldDir);
+                if (cosA < _FlashlightCosHalfAngle) return 0;
+                float angleT = saturate((cosA - _FlashlightCosHalfAngle) / max(1.0 - _FlashlightCosHalfAngle, 0.001));
+                float distT  = 1.0 - saturate(dist / _FlashlightRange);
+                return angleT * angleT * distT * distT;
             }
+
+            bool within_ground_bounds(float3 worldPos)
+            {
+                float2 xzOffset = float2(worldPos.x - _GroundCenterX, worldPos.z - _GroundCenterZ);
+                return length(xzOffset) <= _GroundRadius;
+            }
+
+            // ── Normale mist (noise + trail, alleen binnen zichtbereik) ──────
+
+           float get_fog_density(float3 worldPos, float distFromPlayer)
+{
+    if (!within_ground_bounds(worldPos)) return 0;
+    if (distFromPlayer >= _VisibilityDistance) return 0;
+
+    float height = worldPos.y - _FloorY;
+    if (height < 0 || height > _FogHeight) return 0;
+
+    float heightT       = saturate(height / _FogHeight);
+    float heightFalloff = pow(1.0 - heightT, _HeightPower);
+    if (heightFalloff < 0.001) return 0;
+
+    float4 noise   = _FogNoise.SampleLevel(sampler_FogNoise, worldPos * 0.01 * _NoiseTiling, 0);
+    float  density = saturate(dot(noise, noise) - _DensityThreshold) * _DensityMultiplier * heightFalloff;
+
+    float2 trailUV = float2(
+        (worldPos.x - _MistTrailOriginX) / _MistTrailWorldSize,
+        (worldPos.z - _MistTrailOriginZ) / _MistTrailWorldSize
+    );
+    float trail = SAMPLE_TEXTURE2D_LOD(_MistTrailMap, sampler_MistTrailMap, trailUV, 0).r;
+    density *= trail;
+
+    // Gegarandeerde gradient: altijd iets meer mist hoe verder van de speler,
+    // zodat objecten consequent minder zichtbaar worden op afstand
+    float distFactor    = saturate(distFromPlayer / _VisibilityDistance);
+    float gradientFog   = distFactor * distFactor * 0.15 * heightFalloff;
+    density             = max(density, gradientFog);
+
+    return density;
+}
+
+float get_wall_density(float3 worldPos, float distFromPlayer)
+{
+    if (!within_ground_bounds(worldPos)) return 0;
+
+    float height = worldPos.y - _FloorY;
+    if (height < 0 || height > _FogHeight) return 0;
+
+    float heightT = saturate(height / _FogHeight);
+
+    // Minimum 0.6 aan de grond zodat grondniveau pickups ook verborgen worden,
+    // 1.0 bovenaan zodat de muur duidelijk zichtbaar is langs de bovenkant
+    float wallHeightFactor = lerp(0.6, 1.0, heightT);
+
+    float wallStart = _VisibilityDistance * 0.65;
+
+    if (distFromPlayer >= _VisibilityDistance)
+    {
+        // Voorbij de grens: extreem dicht zodat transmittance vrijwel onmiddellijk 0 is
+        return _WallDensity * 8.0 * wallHeightFactor;
+    }
+    else if (distFromPlayer >= wallStart)
+    {
+        float t          = saturate((distFromPlayer - wallStart) / (_VisibilityDistance - wallStart));
+        float wallFactor = t * t * t;
+        return wallFactor * _WallDensity * wallHeightFactor;
+    }
+
+    return 0;
+}
+
+            // ── Fragment ──────────────────────────────────────────────────────
 
             half4 frag(Varyings IN) : SV_Target
             {
@@ -101,41 +193,67 @@ Shader "Custom/VolumetricFog"
                     pixCoords, (int)(_Time.y / max(HALF_EPS, unity_DeltaTime.x))) * _NoiseOffset;
 
                 float  transmittance = 1.0;
-                float4 fogCol        = _Color;
+                float3 fogAccum      = float3(0, 0, 0);
+                float3 wallAccum     = float3(0, 0, 0);
 
                 while (distTravelled < distLimit)
                 {
                     float3 rayPos = _WorldSpaceCameraPos + rayDir * distTravelled;
-                    float  density = get_density(rayPos);
 
-                    if (density > 0)
+                    float2 toPlayer       = float2(rayPos.x - _WorldSpaceCameraPos.x, rayPos.z - _WorldSpaceCameraPos.z);
+                    float  distFromPlayer = length(toPlayer);
+
+                    float fogDensity  = get_fog_density(rayPos, distFromPlayer);
+                    float wallDensity = get_wall_density(rayPos, distFromPlayer);
+                    float totalDensity = fogDensity + wallDensity;
+
+                    if (totalDensity > 0)
                     {
-                        Light mainLight = GetMainLight(TransformWorldToShadowCoord(rayPos));
-                        fogCol.rgb += mainLight.color * _LightContribution.rgb
-                            * henyey_greenstein(dot(rayDir, mainLight.direction), _LightScattering)
-                            * density * mainLight.shadowAttenuation * _StepSize;
-
-                        #if defined(_ADDITIONAL_LIGHTS)
-                        uint lightCount = GetAdditionalLightsCount();
-                        for (uint i = 0; i < lightCount; i++)
+                        // Normale mist met belichting
+                        if (fogDensity > 0.001)
                         {
-                            Light addLight = GetAdditionalLight(i, rayPos);
-                            if (addLight.distanceAttenuation > 0.001)
-                            {
-                                fogCol.rgb += addLight.color * _LightContribution.rgb
-                                    * henyey_greenstein(dot(rayDir, addLight.direction), _LightScattering)
-                                    * density * addLight.distanceAttenuation * _StepSize * 3.0;
-                            }
-                        }
-                        #endif
+                            float3 litFog = _Color.rgb;
 
-                        transmittance *= exp(-density * _StepSize);
+                            Light mainLight = GetMainLight(TransformWorldToShadowCoord(rayPos));
+                            litFog += mainLight.color * _LightContribution.rgb
+                                * henyey_greenstein(dot(rayDir, mainLight.direction), _LightScattering)
+                                * mainLight.shadowAttenuation;
+
+                            #if defined(_ADDITIONAL_LIGHTS)
+                            uint lightCount = GetAdditionalLightsCount();
+                            for (uint i = 0; i < lightCount; i++)
+                            {
+                                Light addLight = GetAdditionalLight(i, rayPos);
+                                if (addLight.distanceAttenuation > 0.001)
+                                {
+                                    litFog += addLight.color * _LightContribution.rgb
+                                        * henyey_greenstein(dot(rayDir, addLight.direction), _LightScattering)
+                                        * addLight.distanceAttenuation * 3.0;
+                                }
+                            }
+                            #endif
+
+                            fogAccum += litFog * fogDensity * _StepSize * transmittance;
+                        }
+
+                        // Muur — puur grijs, geen belichting
+                        wallAccum += _WallColor.rgb * wallDensity * _StepSize * transmittance;
+
+                        // Zaklamp scattering
+                        float flashContrib = flashlight_contribution(rayPos);
+                        if (flashContrib > 0.001)
+                            fogAccum += _FlashlightBeamColor.rgb * flashContrib * fogDensity * _StepSize * _FlashlightScatterStrength * transmittance;
+
+                        transmittance *= exp(-totalDensity * _StepSize);
+                        if (transmittance < 0.005) break;
                     }
 
                     distTravelled += _StepSize;
                 }
 
-                return lerp(col, fogCol, 1.0 - saturate(transmittance));
+                // Scène * doorzichtigheid + mist + muur
+                float3 result = col.rgb * transmittance + fogAccum + wallAccum;
+                return float4(result, col.a);
             }
             ENDHLSL
         }

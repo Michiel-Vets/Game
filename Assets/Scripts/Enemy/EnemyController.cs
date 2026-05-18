@@ -184,6 +184,7 @@ public class EnemyController : MonoBehaviour
     [Header("Visibility")]
     [SerializeField] private float visibilityFadeSpeed = 3f;
     [SerializeField, Range(0f, 1f)] private float baseVisibility = 0.02f;
+    [SerializeField] private float enemyVisibilityDistance = 20f;
 
 
 
@@ -516,8 +517,15 @@ public class EnemyController : MonoBehaviour
 
     private void UpdateVisibility()
     {
-        float effectiveTarget = Mathf.Max(_targetVisibility, flashlightDamage, _materializationProgress, baseVisibility); _currentVisibility = Mathf.Lerp(_currentVisibility, effectiveTarget, Time.fixedDeltaTime * visibilityFadeSpeed);
-        ghostClothSetup?.SetVisibility(_currentVisibility);
+        float effectiveTarget = Mathf.Max(_targetVisibility, flashlightDamage, _materializationProgress, baseVisibility);
+        _currentVisibility = Mathf.Lerp(_currentVisibility, effectiveTarget, Time.fixedDeltaTime * visibilityFadeSpeed);
+
+        float dist = playerTarget != null
+            ? Vector3.Distance(transform.position, playerTarget.position)
+            : 0f;
+        float distanceFactor = Mathf.Clamp01(1f - (dist / enemyVisibilityDistance));
+
+        ghostClothSetup?.SetVisibility(_currentVisibility * distanceFactor);
     }
 
     // ── Sprint / stamina ─────────────────────────────────────────────────────

@@ -28,6 +28,12 @@ public class FlashlightController : MonoBehaviour
     private bool isOn;
     private HashSet<EnemyController> _litEnemies = new HashSet<EnemyController>();
 
+    private static readonly int PropPos = Shader.PropertyToID("_FlashlightWorldPos");
+    private static readonly int PropDir = Shader.PropertyToID("_FlashlightWorldDir");
+    private static readonly int PropCosAngle = Shader.PropertyToID("_FlashlightCosHalfAngle");
+    private static readonly int PropRange = Shader.PropertyToID("_FlashlightRange");
+    private static readonly int PropEnabled = Shader.PropertyToID("_FlashlightEnabled");
+
     void Awake()
     {
         if (flashlight == null)
@@ -59,6 +65,8 @@ public class FlashlightController : MonoBehaviour
             if (damageEnemies)
                 HandleBeam();
         }
+
+        UpdateShaderGlobals();
     }
 
     public void Toggle()
@@ -81,6 +89,22 @@ public class FlashlightController : MonoBehaviour
                 enemy.SetTargetVisibility(0f);
             _litEnemies.Clear();
         }
+
+        UpdateShaderGlobals();
+    }
+
+    private void UpdateShaderGlobals()
+    {
+        bool active = isOn && flashlight != null;
+        Shader.SetGlobalFloat(PropEnabled, active ? 1f : 0f);
+
+        if (!active) return;
+
+        float cosHalfAngle = Mathf.Cos(flashlight.spotAngle * 0.5f * Mathf.Deg2Rad);
+        Shader.SetGlobalVector(PropPos, transform.position);
+        Shader.SetGlobalVector(PropDir, transform.forward);
+        Shader.SetGlobalFloat(PropCosAngle, cosHalfAngle);
+        Shader.SetGlobalFloat(PropRange, flashlight.range);
     }
 
     private void HandleBeam()
