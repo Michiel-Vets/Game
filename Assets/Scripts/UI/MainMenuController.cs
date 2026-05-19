@@ -15,6 +15,9 @@ public class MainMenuController : MonoBehaviour
     [SerializeField] private Button normalButton;
     [SerializeField] private Button hardButton;
 
+    [Header("HUD")]
+    [SerializeField] private GameObject hudRoot;
+
     [Header("Player References")]
     [SerializeField] private PlayerController playerController;
     [SerializeField] private PlayerInput playerInput;
@@ -31,6 +34,7 @@ public class MainMenuController : MonoBehaviour
         if (playerInput == null)
             playerInput = FindObjectOfType<PlayerInput>();
 
+        Time.timeScale = 0f;
         DisablePlayer();
 
         if (fullscreenToggle == null)
@@ -56,6 +60,7 @@ public class MainMenuController : MonoBehaviour
     {
         mainPanel.SetActive(false);
         settingsPanel.SetActive(false);
+        Time.timeScale = 1f;
         EnablePlayer();
     }
 
@@ -92,6 +97,8 @@ public class MainMenuController : MonoBehaviour
             playerInput.enabled = false;
         if (playerController != null)
             playerController.SetControlsEnabled(false);
+        if (hudRoot != null)
+            hudRoot.SetActive(false);
 
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
@@ -103,6 +110,8 @@ public class MainMenuController : MonoBehaviour
             playerInput.enabled = true;
         if (playerController != null)
             playerController.SetControlsEnabled(true);
+        if (hudRoot != null)
+            hudRoot.SetActive(true);
 
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
@@ -110,7 +119,6 @@ public class MainMenuController : MonoBehaviour
 
     private void OnFullscreenChanged(bool value)
     {
-        Debug.Log("Fullscreen toggle: " + value);
         Screen.fullScreen = value;
         PlayerPrefs.SetInt("Fullscreen", value ? 1 : 0);
         PlayerPrefs.Save();

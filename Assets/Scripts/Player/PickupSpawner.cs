@@ -30,16 +30,34 @@ public class PickupSpawner : MonoBehaviour
     private Transform player;
     private float batteryTimer;
     private float healthTimer;
+    private bool difficultyApplied;
 
     private void Start()
     {
         PlayerFinder.TryAssignIfNull(ref player);
+    }
+
+    private void ApplyDifficulty()
+    {
+        DifficultySettings.Load();
+        maxBatteryPickups = Mathf.Max(1, Mathf.RoundToInt(maxBatteryPickups * DifficultySettings.PickupMaxMultiplier));
+        maxHealthPickups = Mathf.Max(1, Mathf.RoundToInt(maxHealthPickups * DifficultySettings.PickupMaxMultiplier));
+        batterySpawnInterval *= DifficultySettings.PickupIntervalMultiplier;
+        healthSpawnInterval *= DifficultySettings.PickupIntervalMultiplier;
+
         batteryTimer = batterySpawnInterval;
         healthTimer = healthSpawnInterval;
+        difficultyApplied = true;
     }
 
     private void Update()
     {
+        if (!difficultyApplied)
+        {
+            if (Time.timeScale <= 0f) return;
+            ApplyDifficulty();
+        }
+
         PlayerFinder.TryAssignIfNull(ref player);
         if (player == null) return;
 

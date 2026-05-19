@@ -184,6 +184,7 @@ public class EnemyController : MonoBehaviour
     [Header("Visibility")]
     [SerializeField] private float visibilityFadeSpeed = 3f;
     [SerializeField, Range(0f, 1f)] private float baseVisibility = 0.02f;
+    [SerializeField] private float enemyVisibilityDistance = 40f;
 
     [Header("Attack Materialization")]
     [SerializeField] private float materializationRange = 8f;
@@ -514,6 +515,14 @@ public class EnemyController : MonoBehaviour
     private void UpdateVisibility()
     {
         float effectiveTarget = Mathf.Max(_targetVisibility, flashlightDamage, _materializationProgress, baseVisibility);
+
+        if (playerTarget != null)
+        {
+            float dist = Vector3.Distance(transform.position, playerTarget.position);
+            float fogFactor = 1f - Mathf.Clamp01(Mathf.InverseLerp(enemyVisibilityDistance * 0.4f, enemyVisibilityDistance, dist));
+            effectiveTarget *= fogFactor;
+        }
+
         _currentVisibility = Mathf.Lerp(_currentVisibility, effectiveTarget, Time.fixedDeltaTime * visibilityFadeSpeed);
         ghostClothSetup?.SetVisibility(_currentVisibility);
     }

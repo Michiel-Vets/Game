@@ -10,6 +10,9 @@ public class GameOverScreen : MonoBehaviour
     [SerializeField] private PlayerController playerController;
     [SerializeField] private PlayerInput playerInput;
 
+    [Header("HUD")]
+    [SerializeField] private GameObject hudRoot;
+
     private void Awake()
     {
         if (gameOverPanel != null)
@@ -35,35 +38,26 @@ public class GameOverScreen : MonoBehaviour
     private void FindReferencesIfNeeded()
     {
         GameObject player = PlayerFinder.FindPlayerObject();
-
-        if (player == null)
-            return;
+        if (player == null) return;
 
         if (healthController == null)
             healthController = player.GetComponent<HealthController>();
-
         if (playerController == null)
             playerController = player.GetComponent<PlayerController>();
-
         if (playerInput == null)
             playerInput = player.GetComponent<PlayerInput>();
     }
 
-    /// <summary>
-    /// Single source of truth for death consequences:
-    /// shows the panel, disables all player input, stops time, unlocks cursor.
-    /// PlayerController.HandleDeath() no longer does any of this.
-    /// </summary>
     private void ShowGameOver()
     {
         if (gameOverPanel != null)
             gameOverPanel.SetActive(true);
 
-        // Disable movement and look controls
+        if (hudRoot != null)
+            hudRoot.SetActive(false);
+
         if (playerController != null)
             playerController.SetControlsEnabled(false);
-
-        // Disable the Unity Input System component entirely
         if (playerInput != null)
             playerInput.enabled = false;
 

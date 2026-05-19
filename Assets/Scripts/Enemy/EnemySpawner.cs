@@ -35,12 +35,11 @@ public class EnemySpawner : MonoBehaviour
 
     private float survivedTime;
     private float spawnTimer;
+    private bool difficultyApplied;
 
     private void Start()
     {
         PlayerFinder.TryAssignIfNull(ref player);
-        DifficultySettings.Load();
-        ApplyDifficulty();
 
         if (enemyPrefab == null)
             Debug.LogError("EnemySpawner: Enemy Prefab is not assigned.");
@@ -50,13 +49,21 @@ public class EnemySpawner : MonoBehaviour
 
     private void ApplyDifficulty()
     {
+        DifficultySettings.Load();
         startSpawnInterval *= DifficultySettings.SpawnIntervalMultiplier;
         minimumSpawnInterval *= DifficultySettings.SpawnIntervalMultiplier;
         startMaxEnemiesAlive = Mathf.Max(1, startMaxEnemiesAlive + DifficultySettings.MaxEnemiesBonus);
+        difficultyApplied = true;
     }
 
     private void Update()
     {
+        if (!difficultyApplied)
+        {
+            if (Time.timeScale <= 0f) return;
+            ApplyDifficulty();
+        }
+
         PlayerFinder.TryAssignIfNull(ref player);
 
         if (enemyPrefab == null || player == null)
@@ -120,65 +127,33 @@ public class EnemySpawner : MonoBehaviour
 
     private float GetCurrentSpawnInterval()
     {
-        return Mathf.Max(minimumSpawnInterval, startSpawnInterval - survivedTime * spawnIntervalDecreasePerSecond);
+        float interval = startSpawnInterval - spawnIntervalDecreasePerSecond * survivedTime;
+        return Mathf.Max(interval, minimumSpawnInterval);
     }
 
-    private int GetCurrentMaxEnemiesAlive()
+    private int GetCurrentMaxEnemies()
     {
-        int increases = Mathf.FloorToInt(survivedTime / increaseLimitEverySeconds);
-        return Mathf.Min(startMaxEnemiesAlive + increases * enemyLimitIncreaseAmount, maxEnemyLimit);
+        int bonus = Mathf.FloorToInt(survivedTime / increaseLimitEverySeconds) * enemyLimitIncreaseAmount;
+        return Mathf.Min(startMaxEnemiesAlive + bonus, maxEnemyLimit);
     }
 
     private void SpawnEnemies()
     {
-        int currentMax = GetCurrentMaxEnemiesAlive();
+        if (activeEnemies.Count >= GetCurrentMaxEnemies()) return;
+        if (edgePoints.Count == 0) return;
 
         for (int i = 0; i < enemiesPerSpawn; i++)
         {
-            if (activeEnemies.Count >= currentMax)
-                return;
+            if (activeEnemies.Count >= GetCurrentMaxEnemies()) break;
 
-            if (!TryGetEdgeSpawnPosition(out Vector3 spawnPosition))
-                return;
-
-            GameObject enemy = Instantiate(enemyPrefab, spawnPosition, Quaternion.identity);
-
-            if (enemy.TryGetComponent(out EnemyController controller))
-            {
-                controller.SetTarget(player);
+            Vector3 spawnPos = edgePoints[Random.Range(0, edgePoints.Count)];
+            GameObject enemy = Instantiate(enemyPrefab, spawnPos, Quaternion.identity);
+            EnemyController controller = enemy.GetComponent<EnemyController>();
+            if (controller != null)
                 controller.SetSurvivedTime(survivedTime);
-            }
 
             activeEnemies.Add(enemy);
         }
-    }
-
-    private bool TryGetEdgeSpawnPosition(out Vector3 spawnPosition)
-    {
-        if (edgePoints.Count == 0)
-        {
-            spawnPosition = Vector3.zero;
-            return false;
-        }
-
-        int tries = Mathf.Min(5, edgePoints.Count);
-        Vector3 best = edgePoints[Random.Range(0, edgePoints.Count)];
-        float bestDist = Vector3.Distance(best, player.position);
-
-        for (int i = 1; i < tries; i++)
-        {
-            Vector3 candidate = edgePoints[Random.Range(0, edgePoints.Count)];
-            float dist = Vector3.Distance(candidate, player.position);
-
-            if (dist > bestDist)
-            {
-                best = candidate;
-                bestDist = dist;
-            }
-        }
-
-        spawnPosition = best;
-        return true;
     }
 
     private void CleanupDestroyedEnemies()
@@ -194,6 +169,6 @@ public class EnemySpawner : MonoBehaviour
     {
         Gizmos.color = Color.red;
         foreach (Vector3 p in edgePoints)
-            Gizmos.DrawSphere(p, 0.4f);
+            Gizmos.DrawSphere(p, 0.5f);
     }
 }
