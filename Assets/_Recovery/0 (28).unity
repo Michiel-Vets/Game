@@ -1871,7 +1871,6 @@ MonoBehaviour:
   easyButton: {fileID: 343728615}
   normalButton: {fileID: 2011858248}
   hardButton: {fileID: 696676105}
-  fullscreenController: {fileID: 523815067}
   playerController: {fileID: 7737689766861733513}
   playerInput: {fileID: 6833637101991149978}
 --- !u!114 &523815067
@@ -3722,11 +3721,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 46090c4c1bfc10842b4a82e5ca67a5cd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HealthController
-  maxHealth: 100
-  currentHealth: 0
-  healthBar: {fileID: 0}
-  fullWidth: 200
-  barHeight: 20
 --- !u!1 &1376704269
 GameObject:
   m_ObjectHideFlags: 0
@@ -4247,11 +4241,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 46090c4c1bfc10842b4a82e5ca67a5cd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HealthController
-  maxHealth: 100
-  currentHealth: 0
-  healthBar: {fileID: 0}
-  fullWidth: 200
-  barHeight: 20
 --- !u!114 &1444180903
 MonoBehaviour:
   m_ObjectHideFlags: 0

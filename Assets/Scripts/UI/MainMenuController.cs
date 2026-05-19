@@ -33,6 +33,12 @@ public class MainMenuController : MonoBehaviour
 
         DisablePlayer();
 
+        if (fullscreenToggle == null)
+        {
+            Debug.LogError("fullscreenToggle is NIET toegewezen in de Inspector!");
+            return;
+        }
+
         bool fullscreen = PlayerPrefs.GetInt("Fullscreen", Screen.fullScreen ? 1 : 0) == 1;
         Screen.fullScreen = fullscreen;
         fullscreenToggle.SetIsOnWithoutNotify(fullscreen);
@@ -55,9 +61,6 @@ public class MainMenuController : MonoBehaviour
 
     public void OpenSettings()
     {
-        Debug.Log("OpenSettings aangeroepen");
-        Debug.Log("mainPanel: " + mainPanel);
-        Debug.Log("settingsPanel: " + settingsPanel);
         mainPanel.SetActive(false);
         settingsPanel.SetActive(true);
     }
@@ -87,7 +90,6 @@ public class MainMenuController : MonoBehaviour
     {
         if (playerInput != null)
             playerInput.enabled = false;
-
         if (playerController != null)
             playerController.SetControlsEnabled(false);
 
@@ -99,7 +101,6 @@ public class MainMenuController : MonoBehaviour
     {
         if (playerInput != null)
             playerInput.enabled = true;
-
         if (playerController != null)
             playerController.SetControlsEnabled(true);
 
@@ -109,6 +110,7 @@ public class MainMenuController : MonoBehaviour
 
     private void OnFullscreenChanged(bool value)
     {
+        Debug.Log("Fullscreen toggle: " + value);
         Screen.fullScreen = value;
         PlayerPrefs.SetInt("Fullscreen", value ? 1 : 0);
         PlayerPrefs.Save();
