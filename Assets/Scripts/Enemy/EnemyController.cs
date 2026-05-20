@@ -1,4 +1,5 @@
 ﻿using UnityEngine;
+using System.Collections.Generic;
 
 [RequireComponent(typeof(Rigidbody))]
 public class EnemyController : MonoBehaviour
@@ -6,13 +7,18 @@ public class EnemyController : MonoBehaviour
     private enum BehaviourState
     {
         Inactive, Chase, Flank, Intercept, Lunge, Recoil,
-        Retreat, Weakened, Fleeing, Dying,
+        Retreat, Weakened, Dying,
     }
 
     private static int formationCounter;
+    private static readonly List<EnemyController> _allActive = new List<EnemyController>();
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-    private static void ResetStatics() => formationCounter = 0;
+    private static void ResetStatics()
+    {
+        formationCounter = 0;
+        _allActive.Clear();
+    }
 
     [Header("Movement")]
     [SerializeField] private float moveSpeed = 5f;
@@ -45,6 +51,7 @@ public class EnemyController : MonoBehaviour
     [SerializeField, Range(0f, 1f)] private float flankChance = 0.45f;
     [SerializeField] private float flankDuration = 12f;
     [SerializeField] private float flankOrbitRadius = 5f;
+    [SerializeField] private float flankOrbitRadiusEarlyWave = 10f;
     [SerializeField] private float flankOrbitSpeed = 1.2f;
     [SerializeField] private float flankSideFlipInterval = 4f;
     [SerializeField, Range(0f, 1f)] private float visibilityDotThreshold = 0.5f;
@@ -52,8 +59,6 @@ public class EnemyController : MonoBehaviour
     [Header("Intercept")]
     [SerializeField] private float interceptDistance = 20f;
     [SerializeField] private float minInterceptDistance = 10f;
-    [SerializeField, Range(0f, 1f)] private float interceptChance = 0.12f;
-    [SerializeField] private float interceptLookAhead = 0.6f;
     [SerializeField] private float interceptMinDuration = 1.5f;
     [SerializeField] private float interceptMaxDuration = 3f;
 
@@ -66,7 +71,10 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private float lungeExhaustTime = 4f;
     [SerializeField] private float lungeCooldown = 40f;
 
-    [Header("Enemy Separation")]
+    [Header("Coordinated Attack")]
+    [SerializeField] private float coordAttackRadius = 20f;
+
+    [Header("Separation")]
     [SerializeField] private LayerMask enemyLayers;
     [SerializeField] private float separationRadius = 2.5f;
     [SerializeField] private float separationStrength = 3f;
@@ -76,6 +84,8 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private float avoidanceDistance = 4f;
     [SerializeField] private float avoidanceRadius = 0.5f;
     [SerializeField] private float avoidanceStrength = 4f;
+
+    [Header("Obstacle Clearance")]
     [SerializeField] private float obstacleScanDistance = 6f;
     [SerializeField] private float obstacleOvershootHeight = 1.2f;
     [SerializeField] private float obstacleLiftSpeed = 6f;
@@ -85,7 +95,7 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private float boundaryLookAhead = 3f;
     [SerializeField] private float boundaryStrength = 6f;
 
-    [Header("Height Wander")]
+    [Header("Height Variation")]
     [SerializeField] private float heightChangeInterval = 3f;
     [SerializeField] private float heightChangeIntervalVariance = 2f;
     [SerializeField] private float minWanderHeight = 1f;
@@ -97,15 +107,16 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private float fatigueDuration = 10f;
     [SerializeField] private float fatigueMinMultiplier = 0.7f;
 
-    [Header("Recoil & Death")]
+    [Header("Damage Reaction")]
     [SerializeField] private float recoilForce = 6f;
     [SerializeField] private float recoilDuration = 0.35f;
+
+    [Header("Death Animation")]
     [SerializeField] private float deathLaunchSpeed = 16f;
     [SerializeField] private float deathSpinSpeed = 360f;
     [SerializeField] private float deathRiseDuration = 1.8f;
 
-    [Header("Weakened Shrink & Fall")]
-    [SerializeField, Range(0.1f, 0.9f)] private float weakenedMinScaleFraction = 0.3f;
+    [Header("Weakened Fall")]
     [SerializeField] private float weakenedMinFloatHeight = 0.15f;
     [SerializeField] private float weakenedFallSpeed = 6f;
 
@@ -115,10 +126,6 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private float knockbackForce = 8f;
     [SerializeField] private float upwardKnockbackForce = 2f;
 
-    [Header("Fleeing")]
-    [SerializeField] private float fleeSpeed = 8f;
-    [SerializeField] private float fleeDuration = 2.5f;
-
     [Header("Weakened")]
     [SerializeField] private float weakenedSpeed = 1.5f;
     [SerializeField] private float weakenedRetreatDistance = 30f;
@@ -127,15 +134,12 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private float flashlightKillTime = 2f;
     [SerializeField] private float healTime = 5f;
     [SerializeField] private float partialHealTimeMultiplier = 2.5f;
-    [SerializeField] private float scaleChangeSpeed = 2f;
 
     [Header("Beam Evasion")]
     [SerializeField] private float beamEvasionStrength = 6f;
-    [SerializeField] private float beamEvasionRadius = 3f;
     [SerializeField, Range(0f, 1f)] private float beamEvasionChance = 0.85f;
 
     [Header("Aggression Scaling")]
-    [SerializeField] private float aggressionSpreadDuration = 300f;
     [SerializeField] private float speedMultiplierMin = 0.4f;
     [SerializeField] private float speedMultiplierMax = 2.8f;
     [SerializeField] private float damageMultiplierMin = 2.5f;
@@ -146,8 +150,6 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private float lungeSpeedMultiplierMax = 2.2f;
     [SerializeField] private float scaleAtMinAggression = 2.8f;
     [SerializeField] private float scaleAtMaxAggression = 0.35f;
-    [SerializeField] private float hpMultiplierMin = 4.5f;
-    [SerializeField] private float hpMultiplierMax = 0.2f;
 
     [Header("Crowd Spreading")]
     [SerializeField] private float crowdCheckInterval = 0.7f;
@@ -156,13 +158,9 @@ public class EnemyController : MonoBehaviour
     [SerializeField, Range(0f, 1f)] private float crowdSpreadChance = 0.65f;
     [SerializeField] private float crowdSpreadMinDuration = 4f;
     [SerializeField] private float crowdSpreadMaxDuration = 8f;
-    [SerializeField] private float crowdSurroundRadius = 7f;
     [SerializeField] private float crowdAngleJitter = 35f;
 
-    [Header("Anticipation Scaling")]
-    [SerializeField] private float anticipationRampDuration = 120f;
-    [SerializeField, Range(0f, 1f)] private float interceptChanceMin = 0.05f;
-    [SerializeField, Range(0f, 1f)] private float interceptChanceMax = 0.45f;
+    [Header("Intercept Lookahead Scaling")]
     [SerializeField] private float interceptLookAheadMin = 0.3f;
     [SerializeField] private float interceptLookAheadMax = 1.2f;
     [SerializeField, Range(0f, 0.9f)] private float maxLungeCooldownReduction = 0.6f;
@@ -197,14 +195,6 @@ public class EnemyController : MonoBehaviour
     private Transform playerTarget;
     private Transform playerCamera;
     private GhostClothSetup ghostClothSetup;
-    private Animator animator;
-
-    private static readonly int HashIsMoving = Animator.StringToHash("IsMoving");
-    private static readonly int HashState = Animator.StringToHash("State");
-    private static readonly int HashSpeed = Animator.StringToHash("Speed");
-    private static readonly int HashIsWeakened = Animator.StringToHash("IsWeakened");
-    private static readonly int HashIsDying = Animator.StringToHash("IsDying");
-    private static readonly int HashRecoil = Animator.StringToHash("Recoil");
 
     private BehaviourState state = BehaviourState.Inactive;
 
@@ -248,10 +238,7 @@ public class EnemyController : MonoBehaviour
     private bool hasChosenEvasionDir;
 
     private float deathTimer;
-    private Vector3 fleeDirection;
     private float crowdCheckTimer;
-
-    private float effectiveInterceptChance;
     private float effectiveInterceptLookAhead;
 
     private float sprintStamina;
@@ -281,7 +268,6 @@ public class EnemyController : MonoBehaviour
         rb.interpolation = RigidbodyInterpolation.Interpolate;
 
         ghostClothSetup = GetComponent<GhostClothSetup>();
-        animator = GetComponent<Animator>();
         _mainCollider = GetComponent<Collider>();
 
         moveSpeed *= DifficultySettings.EnemySpeedMultiplier;
@@ -297,6 +283,7 @@ public class EnemyController : MonoBehaviour
         returnToGroundDistance = Random.Range(2.5f, 7f);
 
         aggressionSpectrum = 0f;
+
         flankSide = Random.value < 0.5f ? 1f : -1f;
         flankAngle = formationSlot * (360f / 8f);
         flankSideTimer = flankSideFlipInterval * Random.Range(0.5f, 1.5f);
@@ -309,9 +296,15 @@ public class EnemyController : MonoBehaviour
         crowdCheckTimer = crowdCheckInterval * Random.Range(0.5f, 1.5f);
         sprintStamina = maxSprintStamina;
 
-        effectiveInterceptChance = interceptChanceMin;
         effectiveInterceptLookAhead = interceptLookAheadMin;
     }
+
+    private void OnEnable()
+    {
+        if (!_allActive.Contains(this)) _allActive.Add(this);
+    }
+
+    private void OnDisable() => _allActive.Remove(this);
 
     private void Start()
     {
@@ -355,11 +348,43 @@ public class EnemyController : MonoBehaviour
         UpdateState(dt);
         UpdateSprint(dt);
         ApplyMovement(dt);
-        UpdateAnimator();
 
         wasInFlashlightBeamLastFrame = isInFlashlightBeam;
         isInFlashlightBeam = false;
-        flashlightEffectFactor = 0f;
+    }
+
+    public static void BroadcastGroupAttack()
+    {
+        foreach (var enemy in _allActive)
+            enemy.ForceChaseState();
+    }
+
+    private void ForceChaseState()
+    {
+        if (state == BehaviourState.Dying ||
+            state == BehaviourState.Retreat ||
+            state == BehaviourState.Weakened) return;
+
+        state = BehaviourState.Chase;
+        stateTimer = Random.Range(4f, 10f);
+        isSprinting = false;
+    }
+
+    public void SetEliteMode()
+    {
+        moveSpeed *= 0.75f;
+        flashlightKillTime *= 2.5f;
+        transform.localScale *= 1.5f;
+        originalScale = transform.localScale;
+    }
+
+    public void SetScoutMode()
+    {
+        moveSpeed *= 1.4f;
+        flashlightKillTime *= 0.4f;
+        retreatSpeed *= 1.5f;
+        transform.localScale *= 0.65f;
+        originalScale = transform.localScale;
     }
 
     // ── Public API ───────────────────────────────────────────────────────────
@@ -373,10 +398,8 @@ public class EnemyController : MonoBehaviour
 
         float baseSpectrum = Mathf.Lerp(-1f, 1f, (float)formationSlot / 7f)
             + Random.Range(-0.15f, 0.15f);
-        // At low aggression all ghosts start near passive; high aggression pushes most to aggressive
         aggressionSpectrum = Mathf.Clamp(baseSpectrum + aggressionLevel * 2f - 1f, -1f, 1f);
 
-        effectiveInterceptChance = Mathf.Lerp(interceptChanceMin, interceptChanceMax, aggressionLevel);
         effectiveInterceptLookAhead = Mathf.Lerp(interceptLookAheadMin, interceptLookAheadMax, aggressionLevel);
 
         ApplyAggressionStats(aggressionLevel);
@@ -391,9 +414,6 @@ public class EnemyController : MonoBehaviour
         lungeTriggerDistance *= Mathf.Lerp(lungeDistanceMultiplierMin, lungeDistanceMultiplierMax, t);
         lungeSpeed *= Mathf.Lerp(lungeSpeedMultiplierMin, lungeSpeedMultiplierMax, t);
 
-        flashlightKillTime *= Mathf.Lerp(hpMultiplierMin, hpMultiplierMax, t);
-        flashlightKillTime = Mathf.Max(0.3f, flashlightKillTime);
-
         float scaleFactor = Mathf.Lerp(scaleAtMinAggression, scaleAtMaxAggression, t);
         originalScale = transform.localScale * scaleFactor;
         transform.localScale = originalScale;
@@ -406,14 +426,11 @@ public class EnemyController : MonoBehaviour
 
     public void TakeRecoil(Vector3 hitDirection)
     {
-        if (state == BehaviourState.Dying || state == BehaviourState.Fleeing)
-            return;
+        if (state == BehaviourState.Dying) return;
 
         recoilDir = new Vector3(-hitDirection.x, 0f, -hitDirection.z).normalized;
         recoilTimer = recoilDuration;
         state = BehaviourState.Recoil;
-
-        if (animator != null) animator.SetTrigger(HashRecoil);
     }
 
     public void SetTargetVisibility(float visibility)
@@ -421,12 +438,27 @@ public class EnemyController : MonoBehaviour
         _targetVisibility = visibility;
     }
 
+    // Wordt aangeroepen door een andere geest die Lunge activeert
+    public void JoinCoordinatedAttack()
+    {
+        if (state == BehaviourState.Inactive ||
+            state == BehaviourState.Dying ||
+            state == BehaviourState.Weakened ||
+            state == BehaviourState.Lunge ||
+            state == BehaviourState.Retreat) return;
+
+        float joinChance = Mathf.Lerp(0.25f, 0.85f, waveAggressionLevel);
+        if (Random.value > joinChance) return;
+
+        state = BehaviourState.Chase;
+        stateTimer = Random.Range(5f, 10f);
+    }
+
     // ── Flashlight ───────────────────────────────────────────────────────────
 
     public void ReceiveFlashlightHit(float effectFactor = 1f, Vector3 beamDirection = default)
     {
-        if (state == BehaviourState.Dying || state == BehaviourState.Fleeing)
-            return;
+        if (state == BehaviourState.Dying) return;
 
         isInFlashlightBeam = true;
         flashlightEffectFactor = Mathf.Max(flashlightEffectFactor, effectFactor);
@@ -447,15 +479,19 @@ public class EnemyController : MonoBehaviour
 
     private void UpdateFlashlightExposure(float dt)
     {
-        if (state == BehaviourState.Dying || state == BehaviourState.Fleeing)
-            return;
+        if (state == BehaviourState.Dying) return;
 
-        if (isInFlashlightBeam)
+        bool activeBeam = isInFlashlightBeam || wasInFlashlightBeamLastFrame;
+
+        if (!activeBeam)
+            flashlightEffectFactor = 0f;
+
+        if (activeBeam)
         {
-            flashlightDamage += dt / flashlightKillTime;
+            flashlightDamage += dt / flashlightKillTime * flashlightEffectFactor;
             flashlightDamage = Mathf.Clamp01(flashlightDamage);
 
-            if (flashlightDamage >= 1f)
+            if (flashlightDamage + _materializationProgress >= 1f)
                 BeginDying();
         }
         else if (state == BehaviourState.Weakened && flashlightDamage > 0f)
@@ -472,26 +508,6 @@ public class EnemyController : MonoBehaviour
                 TransitionToAttack(dist);
             }
         }
-
-        ApplyDamageScale();
-    }
-
-    private void ApplyDamageScale()
-    {
-        if (state == BehaviourState.Dying) return;
-
-        float visualDamage = isInFlashlightBeam
-            ? Mathf.Max(flashlightDamage, 0.15f)
-            : flashlightDamage;
-
-        float scaleFraction = Mathf.Lerp(1f, weakenedMinScaleFraction, visualDamage);
-        Vector3 targetScale = originalScale * scaleFraction;
-        Vector3 prevScale = transform.localScale;
-        transform.localScale = Vector3.MoveTowards(
-            transform.localScale, targetScale, scaleChangeSpeed * Time.fixedDeltaTime);
-
-        if (transform.localScale != prevScale)
-            ghostClothSetup?.NotifyScaleChanged();
     }
 
     private void EnterWeakened()
@@ -507,12 +523,17 @@ public class EnemyController : MonoBehaviour
         rb.linearVelocity = Vector3.zero;
     }
 
-    // ── Materialization ──────────────────────────────────────────────────────
-
     private void UpdateMaterialization(float dt)
     {
+        bool isDirectAttack = state == BehaviourState.Chase || state == BehaviourState.Lunge;
+
+        // Flank/Intercept materialiseren ook, maar alleen als de geest écht dicht bij is
+        bool isCloseApproach = (state == BehaviourState.Flank || state == BehaviourState.Intercept)
+            && playerTarget != null
+            && Vector3.Distance(transform.position, playerTarget.position) <= attackDistance * 2.5f;
+
         bool shouldMaterialize = playerTarget != null
-            && (state == BehaviourState.Chase || state == BehaviourState.Lunge)
+            && (isDirectAttack || isCloseApproach)
             && Vector3.Distance(transform.position, playerTarget.position) <= materializationRange;
 
         float direction = shouldMaterialize ? 1f : -1f;
@@ -523,25 +544,22 @@ public class EnemyController : MonoBehaviour
             Physics.IgnoreCollision(_mainCollider, _playerCollider, _materializationProgress == 0f);
     }
 
-    // ── Visibility ───────────────────────────────────────────────────────────
-
     private void UpdateVisibility()
     {
-        // During retreat: natural visibility is suppressed; flashlight can still reveal
-        float naturalVisibility = (state == BehaviourState.Retreat)
-            ? 0f
-            : Mathf.Max(_materializationProgress, baseVisibility);
+        float damageOpacity = Mathf.Clamp01(flashlightDamage + _materializationProgress);
 
-        float effectiveTarget = Mathf.Max(_targetVisibility, flashlightDamage, naturalVisibility);
+        float naturalBase = state == BehaviourState.Retreat ? 0f : _materializationProgress;
+        float ambientTarget = Mathf.Max(_targetVisibility, naturalBase, baseVisibility);
 
         if (playerTarget != null)
         {
             float dist = Vector3.Distance(transform.position, playerTarget.position);
             float fogFactor = 1f - Mathf.Clamp01(
                 Mathf.InverseLerp(enemyVisibilityDistance * 0.4f, enemyVisibilityDistance, dist));
-            effectiveTarget *= fogFactor;
+            ambientTarget *= fogFactor;
         }
 
+        float effectiveTarget = Mathf.Max(ambientTarget, damageOpacity);
         _currentVisibility = Mathf.Lerp(
             _currentVisibility, effectiveTarget, Time.fixedDeltaTime * visibilityFadeSpeed);
         ghostClothSetup?.SetVisibility(_currentVisibility);
@@ -553,7 +571,6 @@ public class EnemyController : MonoBehaviour
     {
         if (state == BehaviourState.Inactive ||
             state == BehaviourState.Dying ||
-            state == BehaviourState.Fleeing ||
             state == BehaviourState.Weakened ||
             state == BehaviourState.Recoil ||
             state == BehaviourState.Retreat ||
@@ -613,9 +630,7 @@ public class EnemyController : MonoBehaviour
 
     private void UpdateState(float dt)
     {
-        float distToPlayer = playerTarget != null
-            ? Vector3.Distance(transform.position, playerTarget.position)
-            : 0f;
+        float distToPlayer = Vector3.Distance(transform.position, playerTarget.position);
 
         if (state == BehaviourState.Dying)
         {
@@ -623,13 +638,6 @@ public class EnemyController : MonoBehaviour
             rb.linearVelocity = new Vector3(0f, deathLaunchSpeed, 0f);
             transform.rotation *= Quaternion.Euler(0f, deathSpinSpeed * dt, 0f);
             if (deathTimer <= 0f) Destroy(gameObject);
-            return;
-        }
-
-        if (state == BehaviourState.Fleeing)
-        {
-            stateTimer -= dt;
-            if (stateTimer <= 0f) BeginDying();
             return;
         }
 
@@ -661,7 +669,6 @@ public class EnemyController : MonoBehaviour
             return;
         }
 
-        // Retreat: ghost withdraws and becomes invisible
         if (state == BehaviourState.Retreat)
         {
             retreatTimer -= dt;
@@ -670,7 +677,8 @@ public class EnemyController : MonoBehaviour
             return;
         }
 
-        // Active attack states: Chase, Flank, Intercept
+        // ── Actieve aanvalsstaten ─────────────────────────────────────────────
+
         crowdCheckTimer -= dt;
         if (crowdCheckTimer <= 0f)
         {
@@ -682,7 +690,7 @@ public class EnemyController : MonoBehaviour
         float effectiveLungeTrigger = lungeTriggerDistance * Mathf.Lerp(0.6f, 1.4f, aggrT);
         float effectiveLungeChance = lungeChance
             * Mathf.Lerp(0.4f, 1.6f, aggrT)
-            * Mathf.Lerp(0.15f, 1.4f, waveAggressionLevel);
+            * Mathf.Lerp(0.02f, 1.4f, waveAggressionLevel);
 
         if (lungeCooldownTimer.IsReady
             && distToPlayer <= effectiveLungeTrigger
@@ -700,8 +708,7 @@ public class EnemyController : MonoBehaviour
             case BehaviourState.Intercept:
                 if (stateTimer <= 0f)
                 {
-                    // Failed to close in on player → chance to retreat based on wave aggression
-                    float retreatChance = Mathf.Lerp(0.7f, 0.1f, waveAggressionLevel);
+                    float retreatChance = Mathf.Lerp(0.9f, 0.05f, waveAggressionLevel);
                     if (distToPlayer > attackDistance * 2f && Random.value < retreatChance)
                         BeginRetreat();
                     else
@@ -712,8 +719,13 @@ public class EnemyController : MonoBehaviour
             case BehaviourState.Flank:
                 if (stateTimer <= 0f)
                 {
-                    state = BehaviourState.Chase;
-                    stateTimer = Random.Range(3f, 8f);
+                    if (waveAggressionLevel < 0.4f)
+                        TransitionToAttack(distToPlayer);
+                    else
+                    {
+                        state = BehaviourState.Chase;
+                        stateTimer = Random.Range(3f, 8f);
+                    }
                 }
                 else
                 {
@@ -744,57 +756,31 @@ public class EnemyController : MonoBehaviour
     private void TransitionToAttack(float distToPlayer)
     {
         bool canIntercept = distToPlayer >= minInterceptDistance && distToPlayer <= interceptDistance;
-        bool choosesIntercept = canIntercept && Random.value <= effectiveInterceptChance;
 
-        if (choosesIntercept)
+        float wFlank = Mathf.Lerp(0.65f, 0.20f, waveAggressionLevel);
+        float wIntercept = canIntercept ? Mathf.Lerp(0.28f, 0.15f, waveAggressionLevel) : 0f;
+        float wChase = Mathf.Lerp(0.07f, 0.65f, waveAggressionLevel);
+
+        float total = wFlank + wIntercept + wChase;
+        float roll = Random.value * total;
+
+        if (roll < wFlank)
+        {
+            state = BehaviourState.Flank;
+            stateTimer = Mathf.Lerp(flankDuration * 1.6f, flankDuration, waveAggressionLevel)
+                + Random.Range(-2f, 2f);
+            TryBeginFlankSprint();
+        }
+        else if (roll < wFlank + wIntercept)
         {
             state = BehaviourState.Intercept;
             stateTimer = Random.Range(interceptMinDuration, interceptMaxDuration);
         }
         else
         {
-            // Wave aggression drives behaviour:
-            // Wave 1 (aggression 0) → high flank bias (stalking)
-            // Late waves (aggression 1) → mostly direct chase
-            float aggressionBias = Mathf.Lerp(0.15f, (aggressionSpectrum + 1f) * 0.5f, waveAggressionLevel);
-            float effectiveFlankChance = Mathf.Lerp(0.9f, flankChance, waveAggressionLevel);
-
-            if (Random.value > aggressionBias && Random.value <= effectiveFlankChance)
-            {
-                state = BehaviourState.Flank;
-                stateTimer = flankDuration + Random.Range(-3f, 3f);
-                TryBeginFlankSprint();
-            }
-            else
-            {
-                state = BehaviourState.Chase;
-                stateTimer = Random.Range(3f, 8f);
-            }
+            state = BehaviourState.Chase;
+            stateTimer = Mathf.Lerp(2f, 8f, waveAggressionLevel) + Random.Range(-0.5f, 1f);
         }
-    }
-
-    private void BeginRetreat()
-    {
-        if (state == BehaviourState.Dying ||
-            state == BehaviourState.Fleeing ||
-            state == BehaviourState.Weakened)
-            return;
-
-        state = BehaviourState.Retreat;
-
-        float duration = Mathf.Lerp(maxRetreatDuration, minRetreatDuration, waveAggressionLevel);
-        retreatTimer = duration * Random.Range(0.8f, 1.2f);
-
-        if (playerTarget != null)
-            retreatDirection = (transform.position - playerTarget.position).normalized;
-        else
-            retreatDirection = Quaternion.Euler(0f, Random.Range(0f, 360f), 0f) * Vector3.forward;
-
-        retreatDirection.y = 0f;
-        if (retreatDirection.sqrMagnitude < 0.01f)
-            retreatDirection = transform.forward * -1f;
-
-        smoothedVelocity = Vector3.zero;
     }
 
     // ── Lunge ────────────────────────────────────────────────────────────────
@@ -806,6 +792,15 @@ public class EnemyController : MonoBehaviour
         lungeDirection = (playerTarget.position - transform.position).normalized;
         lungeMoveVelocity = Vector3.zero;
         lungeCooldownTimer.Reset(lungeCooldown);
+
+        // Laat nabije geesten meteen aanvallen
+        Collider[] nearby = Physics.OverlapSphere(
+            transform.position, coordAttackRadius, enemyLayers, QueryTriggerInteraction.Ignore);
+        foreach (Collider col in nearby)
+        {
+            if (col.attachedRigidbody == rb) continue;
+            col.GetComponentInParent<EnemyController>()?.JoinCoordinatedAttack();
+        }
     }
 
     private void UpdateLunge(float dt, float distToPlayer)
@@ -830,9 +825,38 @@ public class EnemyController : MonoBehaviour
         }
         else
         {
-            // Lunge exhausted without hitting → retreat
             BeginRetreat();
         }
+    }
+
+    // ── Retreat ───────────────────────────────────────────────────────────────
+
+    private void BeginRetreat()
+    {
+        if (state == BehaviourState.Dying || state == BehaviourState.Weakened) return;
+
+        state = BehaviourState.Retreat;
+
+        float duration = Mathf.Lerp(maxRetreatDuration, minRetreatDuration, waveAggressionLevel);
+        retreatTimer = duration * Random.Range(0.8f, 1.2f);
+
+        if (playerTarget != null)
+            retreatDirection = (transform.position - playerTarget.position).normalized;
+        else
+            retreatDirection = Quaternion.Euler(0f, Random.Range(0f, 360f), 0f) * Vector3.forward;
+
+        // Stuur weg van de zaklamp als die recentelijk heeft geraakt
+        if (flashlightBeamDirection != Vector3.zero && (isInFlashlightBeam || flashlightDamage > 0f))
+        {
+            Vector3 awayFromBeam = new Vector3(-flashlightBeamDirection.x, 0f, -flashlightBeamDirection.z).normalized;
+            retreatDirection = Vector3.Lerp(retreatDirection, awayFromBeam, 0.65f).normalized;
+        }
+
+        retreatDirection.y = 0f;
+        if (retreatDirection.sqrMagnitude < 0.01f)
+            retreatDirection = -transform.forward;
+
+        smoothedVelocity = Vector3.zero;
     }
 
     // ── Flank ────────────────────────────────────────────────────────────────
@@ -861,9 +885,7 @@ public class EnemyController : MonoBehaviour
         if (state == BehaviourState.Inactive || state == BehaviourState.Dying)
             return;
 
-        float distToPlayer = playerTarget != null
-            ? Vector3.Distance(transform.position, playerTarget.position)
-            : 0f;
+        float distToPlayer = Vector3.Distance(transform.position, playerTarget.position);
         float yVelocity = GetVerticalVelocity();
 
         if (state == BehaviourState.Recoil)
@@ -936,7 +958,6 @@ public class EnemyController : MonoBehaviour
             case BehaviourState.Intercept: return GetInterceptDirection(toPlayerFlat, distToPlayer);
             case BehaviourState.Flank: return GetFlankDirection(toPlayerFlat, distToPlayer);
             case BehaviourState.Weakened: return GetWeakenedDirection(toPlayerFlat, distToPlayer);
-            case BehaviourState.Fleeing: return fleeDirection;
             case BehaviourState.Retreat: return retreatDirection;
             default: return toPlayerFlat;
         }
@@ -959,73 +980,102 @@ public class EnemyController : MonoBehaviour
 
     private Vector3 GetFlankDirection(Vector3 toPlayerFlat, float distToPlayer)
     {
-        float rad = flankAngle * Mathf.Deg2Rad;
-        Vector3 orbitOffset = new Vector3(Mathf.Sin(rad), 0f, Mathf.Cos(rad)) * flankOrbitRadius;
-        Vector3 targetPos = playerTarget.position + orbitOffset;
-        Vector3 toTarget = targetPos - transform.position;
+        if (distToPlayer <= attackDistance) return toPlayerFlat;
+
+        // Vroege waves orbiten verder: schalen van flankOrbitRadiusEarlyWave naar flankOrbitRadius
+        float effectiveRadius = Mathf.Lerp(flankOrbitRadiusEarlyWave, flankOrbitRadius, waveAggressionLevel);
+        Vector3 orbitOffset = Quaternion.Euler(0f, flankAngle, 0f) * Vector3.forward * effectiveRadius;
+        Vector3 toTarget = playerTarget.position + orbitOffset - transform.position;
         toTarget.y = 0f;
         return toTarget.sqrMagnitude > 0.01f ? toTarget.normalized : toPlayerFlat;
     }
 
     private Vector3 GetWeakenedDirection(Vector3 toPlayerFlat, float distToPlayer)
     {
-        return distToPlayer < weakenedRetreatDistance ? -toPlayerFlat : Vector3.zero;
+        Vector3 retreat = -toPlayerFlat;
+        Vector3 evasion = GetBeamEvasionVector(toPlayerFlat);
+
+        float evasionBlend = Mathf.Lerp(0.1f, 1.2f, (aggressionSpectrum + 1f) * 0.5f);
+        return (retreat + evasion * evasionBlend).normalized;
     }
 
     private Vector3 GetBeamEvasionVector(Vector3 toPlayerFlat)
     {
-        if (!hasChosenEvasionDir || Random.value < 0.01f)
+        if (!isInFlashlightBeam)
         {
-            Vector3 side = Vector3.Cross(toPlayerFlat, Vector3.up);
-            beamEvasionDir = (Random.value < 0.5f ? side : -side) + (-toPlayerFlat * 0.4f);
-            beamEvasionDir = beamEvasionDir.normalized;
+            hasChosenEvasionDir = false;
+            return Vector3.zero;
+        }
+
+        if (!hasChosenEvasionDir || beamEvasionDir == Vector3.zero)
+        {
+            Vector3 perp = Vector3.Cross(toPlayerFlat, Vector3.up);
+            beamEvasionDir = (Random.value < 0.5f ? perp : -perp).normalized;
             hasChosenEvasionDir = true;
         }
+
         return beamEvasionDir;
     }
+
+    // ── Steering helpers ─────────────────────────────────────────────────────
 
     private Vector3 GetSeparation()
     {
         Collider[] nearby = Physics.OverlapSphere(
             transform.position, separationRadius, enemyLayers, QueryTriggerInteraction.Ignore);
-        Vector3 sum = Vector3.zero;
-        foreach (var col in nearby)
+
+        Vector3 push = Vector3.zero;
+        foreach (Collider col in nearby)
         {
-            if (col.gameObject == gameObject) continue;
+            if (col.attachedRigidbody == rb) continue;
             Vector3 away = transform.position - col.transform.position;
             away.y = 0f;
             float dist = away.magnitude;
-            if (dist > 0.01f) sum += away.normalized / dist;
+            if (dist < 0.01f) continue;
+            push += away.normalized * (1f - Mathf.Clamp01(dist / separationRadius));
         }
-        return sum;
+        return push;
     }
 
-    private Vector3 GetObstacleAvoidance(Vector3 primaryDir)
+    private Vector3 GetObstacleAvoidance(Vector3 forward)
     {
-        if (primaryDir.sqrMagnitude < 0.01f) return Vector3.zero;
-        Vector3 origin = transform.position + Vector3.up * 0.5f;
+        if (forward.sqrMagnitude < 0.01f) return Vector3.zero;
 
-        if (Physics.SphereCast(origin, avoidanceRadius, primaryDir,
-            out RaycastHit hit, avoidanceDistance, obstacleLayers))
+        Vector3 origin = transform.position + Vector3.up * 0.7f;
+        float[] angles = { 0f, -35f, 35f, -70f, 70f };
+
+        foreach (float angle in angles)
         {
-            Vector3 reflect = Vector3.Reflect(primaryDir, hit.normal);
-            reflect.y = 0f;
-            return reflect.sqrMagnitude > 0.01f ? reflect.normalized : -primaryDir.normalized;
+            Vector3 dir = Quaternion.Euler(0f, angle, 0f) * forward;
+            if (!Physics.SphereCast(origin, avoidanceRadius, dir, out _,
+                avoidanceDistance, obstacleLayers, QueryTriggerInteraction.Ignore))
+            {
+                return angle == 0f ? Vector3.zero : dir.normalized;
+            }
         }
-        return Vector3.zero;
+        return -forward;
     }
 
     private Vector3 GetBoundaryPush()
     {
-        if (playerTarget == null) return Vector3.zero;
-        Vector3 ahead = transform.position + transform.forward * boundaryLookAhead;
-        Vector3 origin = ahead + Vector3.up * heightRaycastDistance;
-        if (!Physics.Raycast(origin, Vector3.down, heightRaycastDistance * 2f,
-            groundLayers, QueryTriggerInteraction.Ignore))
+        Vector3 push = Vector3.zero;
+        Vector3[] dirs =
         {
-            return (playerTarget.position - transform.position).normalized;
+            Vector3.forward, Vector3.back, Vector3.left, Vector3.right,
+            (Vector3.forward + Vector3.right).normalized,
+            (Vector3.forward + Vector3.left).normalized,
+            (Vector3.back    + Vector3.right).normalized,
+            (Vector3.back    + Vector3.left).normalized,
+        };
+
+        foreach (Vector3 dir in dirs)
+        {
+            Vector3 origin = transform.position + dir * boundaryLookAhead + Vector3.up * 0.5f;
+            if (!Physics.Raycast(origin, Vector3.down, heightRaycastDistance, groundLayers,
+                QueryTriggerInteraction.Ignore))
+                push -= dir;
         }
-        return Vector3.zero;
+        return push.sqrMagnitude > 0.01f ? push.normalized : Vector3.zero;
     }
 
     // ── Speed & height ───────────────────────────────────────────────────────
@@ -1039,7 +1089,6 @@ public class EnemyController : MonoBehaviour
             float spectrumMultiplier = Mathf.Lerp(0.4f, 2.0f, (aggressionSpectrum + 1f) * 0.5f);
             return baseWeakenedSpeed * spectrumMultiplier;
         }
-        if (state == BehaviourState.Fleeing) return fleeSpeed;
         if (state == BehaviourState.Retreat) return retreatSpeed;
 
         float baseSpeed = moveSpeed * chaseSpeedMultiplier;
@@ -1069,9 +1118,7 @@ public class EnemyController : MonoBehaviour
     {
         if (state == BehaviourState.Dying) return 0f;
 
-        float distToPlayer = playerTarget != null
-            ? Vector3.Distance(transform.position, playerTarget.position)
-            : 0f;
+        float distToPlayer = Vector3.Distance(transform.position, playerTarget.position);
         float targetY = GetTargetFlyingHeight(distToPlayer);
         float diff = targetY - transform.position.y;
 
@@ -1089,66 +1136,117 @@ public class EnemyController : MonoBehaviour
     {
         float surfaceY = GetSurfaceY();
         float restHeight = surfaceY + preferredFloatHeight;
+        float maxHeight = surfaceY + maxFloatHeight;
 
         if (state == BehaviourState.Weakened || isInFlashlightBeam)
             return Mathf.Lerp(restHeight, surfaceY + weakenedMinFloatHeight, flashlightDamage);
 
-        float desiredHeight = surfaceY + currentTargetHeight;
+        float desiredHeight = surfaceY + currentTargetHeight
+            + (wantsToFlyHigh ? personalExtraFlyHeight : 0f);
 
-        if (wantsToFlyHigh && distToPlayer <= heightFollowDistance)
-            desiredHeight += personalExtraFlyHeight;
+        if (distToPlayer <= returnToGroundDistance)
+            desiredHeight = restHeight;
+        else if (distToPlayer <= heightFollowDistance)
+            desiredHeight = Mathf.Max(desiredHeight, playerTarget.position.y);
 
-        if (likesClimbingEnemies && playerTarget != null)
+        if (likesClimbingEnemies)
         {
-            Vector3 toPlayer = (playerTarget.position - transform.position).normalized;
-            if (Physics.SphereCast(transform.position, avoidanceRadius, toPlayer,
-                out _, climbCheckDistance, enemyLayers))
-            {
-                desiredHeight += climbOverEnemyHeight;
-            }
+            float climbHeight = GetEnemyClimbHeight();
+            if (climbHeight > desiredHeight) desiredHeight = climbHeight;
         }
 
-        return Mathf.Clamp(desiredHeight, restHeight, surfaceY + maxFloatHeight);
+        float clearanceHeight = GetObstacleClearHeight();
+        if (clearanceHeight > desiredHeight) desiredHeight = clearanceHeight;
+
+        return Mathf.Clamp(desiredHeight, restHeight, maxHeight);
     }
 
-    private float GetSurfaceY()
+    private float GetObstacleClearHeight()
     {
-        Vector3 origin = transform.position + Vector3.up * heightRaycastDistance;
-        if (Physics.Raycast(origin, Vector3.down, out RaycastHit hit,
-            heightRaycastDistance * 2f, groundLayers, QueryTriggerInteraction.Ignore))
-        {
-            return hit.point.y;
-        }
-        return 0f;
+        Vector3 moveDir = new Vector3(smoothedVelocity.x, 0f, smoothedVelocity.z);
+        if (moveDir.sqrMagnitude < 0.01f)
+            moveDir = new Vector3(transform.forward.x, 0f, transform.forward.z);
+        moveDir.Normalize();
+
+        Vector3 origin = transform.position + Vector3.up * 0.5f;
+
+        if (!Physics.SphereCast(origin, obstacleScanRadius, moveDir, out RaycastHit hit,
+            obstacleScanDistance, obstacleLayers, QueryTriggerInteraction.Ignore))
+            return float.MinValue;
+
+        return hit.collider.bounds.max.y + obstacleOvershootHeight;
     }
 
     private bool IsObstacleAhead()
     {
-        return Physics.SphereCast(
-            transform.position, obstacleScanRadius, transform.forward,
-            out _, obstacleScanDistance, obstacleLayers);
+        Vector3 moveDir = new Vector3(smoothedVelocity.x, 0f, smoothedVelocity.z);
+        if (moveDir.sqrMagnitude < 0.01f)
+            moveDir = new Vector3(transform.forward.x, 0f, transform.forward.z);
+        moveDir.Normalize();
+
+        Vector3 origin = transform.position + Vector3.up * 0.5f;
+        return Physics.SphereCast(origin, obstacleScanRadius, moveDir, out _,
+            obstacleScanDistance, obstacleLayers, QueryTriggerInteraction.Ignore);
     }
 
-    // ── Animator ─────────────────────────────────────────────────────────────
-
-    private void UpdateAnimator()
+    private float GetEnemyClimbHeight()
     {
-        if (animator == null) return;
+        Vector3 checkCenter = transform.position
+            + transform.forward * climbCheckDistance + Vector3.up * 0.8f;
 
-        animator.SetInteger(HashState, (int)state);
-        animator.SetFloat(HashSpeed, rb.linearVelocity.magnitude);
-        animator.SetBool(HashIsMoving, rb.linearVelocity.sqrMagnitude > 0.1f);
-        animator.SetBool(HashIsWeakened, state == BehaviourState.Weakened);
-        animator.SetBool(HashIsDying, state == BehaviourState.Dying);
+        Collider[] nearby = Physics.OverlapSphere(
+            checkCenter, separationRadius, enemyLayers, QueryTriggerInteraction.Ignore);
+
+        float highestY = float.MinValue;
+        foreach (Collider col in nearby)
+        {
+            if (col.attachedRigidbody == rb) continue;
+            highestY = Mathf.Max(highestY, col.bounds.max.y);
+        }
+        return highestY == float.MinValue ? float.MinValue : highestY + climbOverEnemyHeight;
     }
 
-    // ── Gizmos ───────────────────────────────────────────────────────────────
-
-    private void OnDrawGizmosSelected()
+    private float GetSurfaceY()
     {
-        Gizmos.color = Color.red;
-        Gizmos.DrawWireSphere(transform.position, lungeTriggerDistance);
-        Gizmos.color = Color.yellow;
-        Gizmos.DrawWireSphere(transform.position, separationRadius);
+        Vector3 origin = transform.position + Vector3.up * 10f;
+
+        float groundY = Physics.Raycast(origin, Vector3.down, out RaycastHit groundHit,
+            heightRaycastDistance, groundLayers, QueryTriggerInteraction.Ignore)
+            ? groundHit.point.y : 0f;
+
+        float obstacleY = Physics.Raycast(origin, Vector3.down, out RaycastHit obstacleHit,
+            heightRaycastDistance, obstacleLayers, QueryTriggerInteraction.Ignore)
+            ? obstacleHit.point.y : float.MinValue;
+
+        return Mathf.Max(groundY, obstacleY);
+    }
+
+    // ── Combat ───────────────────────────────────────────────────────────────
+
+    private void OnCollisionEnter(Collision collision)
+    {
+        if (hasHit) return;
+        if (_materializationProgress < 0.75f) return;
+
+        HealthController health = collision.gameObject.GetComponentInParent<HealthController>();
+        if (health == null || !health.CompareTag("Player")) return;
+
+        hasHit = true;
+
+        float sizeFraction = originalScale.x > 0f
+            ? transform.localScale.x / originalScale.x
+            : 1f;
+
+        health.TakeDamage(health.MaxHealth * damagePercentage * sizeFraction);
+
+        PlayerController pc = health.GetComponent<PlayerController>();
+        if (pc != null)
+        {
+            Vector3 dir = health.transform.position - transform.position;
+            dir.y = 0f;
+            pc.ApplyKnockback(dir, knockbackForce * sizeFraction, upwardKnockbackForce * sizeFraction);
+        }
+
+        Destroy(gameObject);
     }
 }

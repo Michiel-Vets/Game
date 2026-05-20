@@ -62,6 +62,13 @@ public static class DifficultySettings
         _ => 1f,
     };
 
+    public static float WaveTimeoutMultiplier => Current switch
+    {
+        DifficultyLevel.Easy => 1.5f,
+        DifficultyLevel.Hard => 0.7f,
+        _ => 1f,
+    };
+
     public static float WaveEnemyCountMultiplier => Current switch
     {
         DifficultyLevel.Easy => 0.6f,
