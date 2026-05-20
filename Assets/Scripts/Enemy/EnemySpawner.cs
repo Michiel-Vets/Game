@@ -7,18 +7,6 @@ public class EnemySpawner : MonoBehaviour
     [SerializeField] private GameObject enemyPrefab;
     [SerializeField] private Transform player;
 
-    [Header("Difficulty Over Time")]
-    [SerializeField] private float startSpawnInterval = 4f;
-    [SerializeField] private float minimumSpawnInterval = 0.5f;
-    [SerializeField] private float spawnIntervalDecreasePerSecond = 0.03f;
-    [SerializeField] private int startMaxEnemiesAlive = 5;
-    [SerializeField] private int maxEnemyLimit = 50;
-    [SerializeField] private float increaseLimitEverySeconds = 10f;
-    [SerializeField] private int enemyLimitIncreaseAmount = 2;
-
-    [Header("Spawn Amount")]
-    [SerializeField] private int enemiesPerSpawn = 1;
-
     [Header("Map Edge Detection")]
     [SerializeField] private float edgeScanRadius = 60f;
     [SerializeField] private float edgeScanStep = 5f;
@@ -33,9 +21,12 @@ public class EnemySpawner : MonoBehaviour
     private readonly List<GameObject> activeEnemies = new List<GameObject>();
     private readonly List<Vector3> edgePoints = new List<Vector3>();
 
-    private float survivedTime;
     private float spawnTimer;
-    private bool difficultyApplied;
+    private float currentSpawnInterval = 8f;
+    private int currentMaxEnemies;
+    private float currentAggressionLevel;
+    private int currentWaveNumber;
+    private bool isActive;
 
     private void Start()
     {
@@ -47,44 +38,55 @@ public class EnemySpawner : MonoBehaviour
         BakeEdgePoints();
     }
 
-    private void ApplyDifficulty()
+    public void OnWaveStarted(int wave, float aggression, int maxEnemies, float spawnInterval)
     {
-        DifficultySettings.Load();
-        startSpawnInterval *= DifficultySettings.SpawnIntervalMultiplier;
-        minimumSpawnInterval *= DifficultySettings.SpawnIntervalMultiplier;
-        startMaxEnemiesAlive = Mathf.Max(1, startMaxEnemiesAlive + DifficultySettings.MaxEnemiesBonus);
-        difficultyApplied = true;
+        currentWaveNumber = wave;
+        currentAggressionLevel = aggression;
+        currentMaxEnemies = maxEnemies;
+        currentSpawnInterval = spawnInterval;
+        isActive = true;
+        spawnTimer = 0f;
+    }
+
+    public void OnWaveBreak()
+    {
+        isActive = false;
     }
 
     private void Update()
     {
-        if (!difficultyApplied)
-        {
-            if (Time.timeScale <= 0f) return;
-            ApplyDifficulty();
-        }
-
         PlayerFinder.TryAssignIfNull(ref player);
 
-        if (enemyPrefab == null || player == null)
-            return;
+        if (enemyPrefab == null || player == null || !isActive) return;
 
         CleanupDestroyedEnemies();
 
-        survivedTime += Time.deltaTime;
         spawnTimer += Time.deltaTime;
-
-        if (spawnTimer >= GetCurrentSpawnInterval())
+        if (spawnTimer >= currentSpawnInterval)
         {
             spawnTimer = 0f;
             SpawnEnemies();
         }
     }
 
+    private void SpawnEnemies()
+    {
+        if (activeEnemies.Count >= currentMaxEnemies) return;
+        if (edgePoints.Count == 0) return;
+
+        Vector3 spawnPos = edgePoints[Random.Range(0, edgePoints.Count)];
+        GameObject enemy = Instantiate(enemyPrefab, spawnPos, Quaternion.identity);
+
+        EnemyController controller = enemy.GetComponent<EnemyController>();
+        if (controller != null)
+            controller.SetWaveData(currentWaveNumber, currentAggressionLevel);
+
+        activeEnemies.Add(enemy);
+    }
+
     private void BakeEdgePoints()
     {
         edgePoints.Clear();
-
         Vector3 center = transform.position;
 
         for (int i = 0; i < edgeSampleAngles; i++)
@@ -123,37 +125,6 @@ public class EnemySpawner : MonoBehaviour
 
         if (edgePoints.Count == 0)
             Debug.LogWarning("EnemySpawner: No edge points found. Check groundLayer and edgeScanRadius.");
-    }
-
-    private float GetCurrentSpawnInterval()
-    {
-        float interval = startSpawnInterval - spawnIntervalDecreasePerSecond * survivedTime;
-        return Mathf.Max(interval, minimumSpawnInterval);
-    }
-
-    private int GetCurrentMaxEnemies()
-    {
-        int bonus = Mathf.FloorToInt(survivedTime / increaseLimitEverySeconds) * enemyLimitIncreaseAmount;
-        return Mathf.Min(startMaxEnemiesAlive + bonus, maxEnemyLimit);
-    }
-
-    private void SpawnEnemies()
-    {
-        if (activeEnemies.Count >= GetCurrentMaxEnemies()) return;
-        if (edgePoints.Count == 0) return;
-
-        for (int i = 0; i < enemiesPerSpawn; i++)
-        {
-            if (activeEnemies.Count >= GetCurrentMaxEnemies()) break;
-
-            Vector3 spawnPos = edgePoints[Random.Range(0, edgePoints.Count)];
-            GameObject enemy = Instantiate(enemyPrefab, spawnPos, Quaternion.identity);
-            EnemyController controller = enemy.GetComponent<EnemyController>();
-            if (controller != null)
-                controller.SetSurvivedTime(survivedTime);
-
-            activeEnemies.Add(enemy);
-        }
     }
 
     private void CleanupDestroyedEnemies()

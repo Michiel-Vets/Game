@@ -48,6 +48,27 @@ public static class DifficultySettings
         _ => 1f,
     };
 
+    public static float AggressionScaleMultiplier => Current switch
+    {
+        DifficultyLevel.Easy => 0.5f,
+        DifficultyLevel.Hard => 2.0f,
+        _ => 1f,
+    };
+
+    public static float BreakDurationMultiplier => Current switch
+    {
+        DifficultyLevel.Easy => 1.5f,
+        DifficultyLevel.Hard => 0.6f,
+        _ => 1f,
+    };
+
+    public static float WaveEnemyCountMultiplier => Current switch
+    {
+        DifficultyLevel.Easy => 0.6f,
+        DifficultyLevel.Hard => 1.5f,
+        _ => 1f,
+    };
+
     public static void Load()
     {
         Current = (DifficultyLevel)PlayerPrefs.GetInt("Difficulty", 1);
