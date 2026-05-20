@@ -96,7 +96,7 @@ Material:
     - _ClearCoatSmoothness: 0
     - _Cull: 2
     - _Cutoff: 0.5
-    - _DensityMultiplier: 0.2
+    - _DensityMultiplier: 0.91
     - _DensityThreshold: 0.514
     - _DetailAlbedoMapScale: 1
     - _DetailNormalMapScale: 1
@@ -106,16 +106,17 @@ Material:
     - _DstBlend: 0
     - _DstBlendAlpha: 0
     - _EnvironmentReflections: 1
+    - _FadeStartY: 72
     - _FlashlightScatterStrength: 6
     - _FloorY: 0
-    - _FogHeight: 6
+    - _FogHeight: 7
     - _GlossMapScale: 0
     - _Glossiness: 0
     - _GlossyReflections: 0
     - _GroundCenterX: 0
     - _GroundCenterZ: 0
     - _GroundRadius: 149
-    - _HeightPower: 2
+    - _HeightPower: 1.27
     - _LightScattering: 0.2
     - _MaxDistance: 40
     - _Metallic: 0
@@ -130,10 +131,10 @@ Material:
     - _SpecularHighlights: 1
     - _SrcBlend: 1
     - _SrcBlendAlpha: 1
-    - _StepSize: 0.5
+    - _StepSize: 0.1
     - _Surface: 0
     - _VisibilityDistance: 40
-    - _WallDensity: 0.2
+    - _WallDensity: 0.91
     - _WorkflowMode: 1
     - _XRMotionVectorsPass: 1
     - _ZWrite: 1
