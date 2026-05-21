@@ -18,8 +18,11 @@ public class PlayerController : MonoBehaviour
 
     [Header("Jumping")]
     [SerializeField] private float jumpForce = 7f;
-    [SerializeField] private float minJumpVelocity = -0.1f;
-    [SerializeField] private float maxJumpVelocity = 0.5f;
+
+    [Header("Ground Check")]
+    [SerializeField] private float groundCheckRadius = 0.3f;
+    [SerializeField] private float groundCheckDistance = 0.1f;
+    [SerializeField] private LayerMask groundLayers;
 
     [Header("Knockback")]
     [SerializeField] private float knockbackDecay = 8f;
@@ -28,6 +31,7 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private float healthChangePerSecond = 25f;
 
     private Rigidbody rb;
+    private CapsuleCollider capsuleCollider;
 
     private Vector2 moveInput;
     private Vector2 lookInput;
@@ -40,6 +44,8 @@ public class PlayerController : MonoBehaviour
     private void Awake()
     {
         rb = GetComponent<Rigidbody>();
+        capsuleCollider = GetComponent<CapsuleCollider>();
+
         rb.useGravity = true;
         rb.isKinematic = false;
         rb.freezeRotation = true;
@@ -146,6 +152,13 @@ public class PlayerController : MonoBehaviour
         rb.linearVelocity = new Vector3(horizontal.x, rb.linearVelocity.y, horizontal.z);
     }
 
+    private bool IsGrounded()
+    {
+        float halfHeight = capsuleCollider.height * 0.5f;
+        Vector3 bottom = transform.position + Vector3.down * (halfHeight - groundCheckRadius + groundCheckDistance);
+        return Physics.CheckSphere(bottom, groundCheckRadius, groundLayers, QueryTriggerInteraction.Ignore);
+    }
+
     private void HandleJump()
     {
         if (!jumpRequested)
@@ -157,9 +170,8 @@ public class PlayerController : MonoBehaviour
         if (staminaController != null && staminaController.IsExhausted)
             return;
 
-        float yVelocity = rb.linearVelocity.y;
-
-        if (yVelocity < minJumpVelocity || yVelocity > maxJumpVelocity)
+        // Alleen springen als de speler op de grond staat
+        if (!IsGrounded())
             return;
 
         rb.linearVelocity = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);
