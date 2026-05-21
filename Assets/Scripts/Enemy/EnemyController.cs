@@ -48,7 +48,6 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private float maxBoostMultiplier = 2f;
 
     [Header("Surround & Flank")]
-    [SerializeField, Range(0f, 1f)] private float flankChance = 0.45f;
     [SerializeField] private float flankDuration = 12f;
     [SerializeField] private float flankOrbitRadius = 5f;
     [SerializeField] private float flankOrbitRadiusEarlyWave = 10f;
@@ -116,8 +115,7 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private float deathSpinSpeed = 360f;
     [SerializeField] private float deathRiseDuration = 1.8f;
 
-    [Header("Weakened Shrink & Fall")]
-    [SerializeField, Range(0.1f, 0.9f)] private float weakenedMinScaleFraction = 0.3f;
+    [Header("Weakened Effects")]
     [SerializeField] private float weakenedMinFloatHeight = 0.15f;
     [SerializeField] private float weakenedFallSpeed = 6f;
 
@@ -133,13 +131,11 @@ public class EnemyController : MonoBehaviour
 
     [Header("Weakened")]
     [SerializeField] private float weakenedSpeed = 1.5f;
-    [SerializeField] private float weakenedRetreatDistance = 30f;
 
     [Header("Flashlight / Health")]
     [SerializeField] private float flashlightKillTime = 2f;
     [SerializeField] private float healTime = 5f;
     [SerializeField] private float partialHealTimeMultiplier = 2.5f;
-    [SerializeField] private float scaleChangeSpeed = 2f;
 
     [Header("Beam Evasion")]
     [SerializeField] private float beamEvasionStrength = 6f;
@@ -156,8 +152,6 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private float lungeSpeedMultiplierMax = 2.2f;
     [SerializeField] private float scaleAtMinAggression = 2.8f;
     [SerializeField] private float scaleAtMaxAggression = 0.35f;
-    [SerializeField] private float hpMultiplierMin = 4.5f;
-    [SerializeField] private float hpMultiplierMax = 0.2f;
 
     [Header("Crowd Spreading")]
     [SerializeField] private float crowdCheckInterval = 0.7f;
@@ -273,6 +267,9 @@ public class EnemyController : MonoBehaviour
     private int currentWaveNumber = 0;
     private float retreatTimer;
     private Vector3 retreatDirection;
+
+    private bool _isScoutMode = false;
+    private bool _isAttackModeVisible = false;
 
     // ── Unity lifecycle ──────────────────────────────────────────────────────
 
@@ -401,15 +398,27 @@ public class EnemyController : MonoBehaviour
         flashlightKillTime *= 2.5f;
         transform.localScale *= 1.5f;
         originalScale = transform.localScale;
+        ghostClothSetup?.NotifyScaleChanged();
     }
 
     public void SetScoutMode()
     {
+        _isScoutMode = true;
         moveSpeed *= 1.4f;
         flashlightKillTime *= 0.4f;
         retreatSpeed *= 1.5f;
         transform.localScale *= 0.65f;
         originalScale = transform.localScale;
+        ghostClothSetup?.SetScoutAppearance(true);
+        ghostClothSetup?.NotifyScaleChanged();
+    }
+
+    public bool IsInAttackMode()
+    {
+        return state == BehaviourState.Chase  ||
+               state == BehaviourState.Lunge  ||
+               state == BehaviourState.Intercept ||
+               state == BehaviourState.Flank;
     }
 
     // ── Public API ───────────────────────────────────────────────────────────
@@ -433,16 +442,18 @@ public class EnemyController : MonoBehaviour
     public void SetHordeMode()
     {
         moveSpeed *= 1.2f;
-        // HP wordt elders verlaagd via multiplier
         transform.localScale *= 0.8f;
         originalScale = transform.localScale;
+        ghostClothSetup?.NotifyScaleChanged();
     }
 
-    public void ApplyMultipliers(float healthMult, float speedMult)
+    public void ApplyMultipliers(float healthMult, float speedMult, bool isVisible = false)
     {
         moveSpeed *= speedMult;
-        flashlightKillTime *= healthMult;
+        float effectiveHealthMult = isVisible ? healthMult * 0.6f : healthMult;
+        flashlightKillTime *= effectiveHealthMult;
         flashlightKillTime = Mathf.Max(0.3f, flashlightKillTime);
+        _isAttackModeVisible = isVisible;
     }
 
     private void ApplyAggressionStats(float antT = 0f)
@@ -453,9 +464,6 @@ public class EnemyController : MonoBehaviour
         damagePercentage *= Mathf.Lerp(damageMultiplierMin, damageMultiplierMax, t);
         lungeTriggerDistance *= Mathf.Lerp(lungeDistanceMultiplierMin, lungeDistanceMultiplierMax, t);
         lungeSpeed *= Mathf.Lerp(lungeSpeedMultiplierMin, lungeSpeedMultiplierMax, t);
-
-        flashlightKillTime *= Mathf.Lerp(hpMultiplierMin, hpMultiplierMax, t);
-        flashlightKillTime = Mathf.Max(0.3f, flashlightKillTime);
 
         float scaleFactor = Mathf.Lerp(scaleAtMinAggression, scaleAtMaxAggression, t);
         originalScale = transform.localScale * scaleFactor;
@@ -550,26 +558,6 @@ public class EnemyController : MonoBehaviour
                 TransitionToAttack(dist);
             }
         }
-
-        ApplyDamageScale();
-    }
-
-    private void ApplyDamageScale()
-    {
-        if (state == BehaviourState.Dying) return;
-
-        float visualDamage = isInFlashlightBeam
-            ? Mathf.Max(flashlightDamage, 0.15f)
-            : flashlightDamage;
-
-        float scaleFraction = Mathf.Lerp(1f, weakenedMinScaleFraction, visualDamage);
-        Vector3 targetScale = originalScale * scaleFraction;
-        Vector3 prevScale = transform.localScale;
-        transform.localScale = Vector3.MoveTowards(
-            transform.localScale, targetScale, scaleChangeSpeed * Time.fixedDeltaTime);
-
-        if (transform.localScale != prevScale)
-            ghostClothSetup?.NotifyScaleChanged();
     }
 
     private void EnterWeakened()
@@ -583,6 +571,7 @@ public class EnemyController : MonoBehaviour
         state = BehaviourState.Dying;
         deathTimer = deathRiseDuration;
         rb.linearVelocity = Vector3.zero;
+        WaveManager.Instance?.NotifyEnemyKilled();
     }
 
     // ── Materialization ──────────────────────────────────────────────────────
@@ -923,11 +912,13 @@ public class EnemyController : MonoBehaviour
         else
             retreatDirection = Quaternion.Euler(0f, Random.Range(0f, 360f), 0f) * Vector3.forward;
 
-        // Stuur weg van de zaklamp als die recent geraakt heeft
+        // Buig de retreatrichting licht zijwaarts van de lichtbundel zodat de geest niet
+        // recht terug langs de beam vlucht – voelt naturaler en minder robotisch
         if (flashlightBeamDirection != Vector3.zero && (isInFlashlightBeam || flashlightDamage > 0f))
         {
-            Vector3 awayFromBeam = new Vector3(-flashlightBeamDirection.x, 0f, -flashlightBeamDirection.z).normalized;
-            retreatDirection = Vector3.Lerp(retreatDirection, awayFromBeam, 0.65f).normalized;
+            Vector3 beamFlat = new Vector3(flashlightBeamDirection.x, 0f, flashlightBeamDirection.z).normalized;
+            Vector3 lateral  = Vector3.Cross(beamFlat, Vector3.up) * flankSide * 0.4f;
+            retreatDirection = (retreatDirection + lateral).normalized;
         }
 
         retreatDirection.y = 0f;
@@ -1328,19 +1319,16 @@ public class EnemyController : MonoBehaviour
         if (health == null || !health.CompareTag("Player")) return;
 
         hasHit = true;
+        WaveManager.Instance?.NotifyEnemyKilled();
 
-        float sizeFraction = originalScale.x > 0f
-            ? transform.localScale.x / originalScale.x
-            : 1f;
-
-        health.TakeDamage(health.MaxHealth * damagePercentage * sizeFraction);
+        health.TakeDamage(health.MaxHealth * damagePercentage);
 
         PlayerController pc = health.GetComponent<PlayerController>();
         if (pc != null)
         {
             Vector3 dir = health.transform.position - transform.position;
             dir.y = 0f;
-            pc.ApplyKnockback(dir, knockbackForce * sizeFraction, upwardKnockbackForce * sizeFraction);
+            pc.ApplyKnockback(dir, knockbackForce, upwardKnockbackForce);
         }
 
         Destroy(gameObject);

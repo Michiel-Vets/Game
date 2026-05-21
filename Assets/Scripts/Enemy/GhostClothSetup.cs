@@ -57,6 +57,9 @@ public class GhostClothSetup : MonoBehaviour
     private Rigidbody _rb;
     private Transform _visualRoot;
 
+    private bool _isScout;
+    private float _currentAlpha;
+
     private float _phaseX;
     private float _phaseZ;
     private float _hoverSeedY;
@@ -105,12 +108,36 @@ public class GhostClothSetup : MonoBehaviour
     {
         if (_smr == null) return;
 
-        _smr.enabled = alpha > 0.005f;
+        _currentAlpha = alpha;
+        // Scouts zijn altijd een tikkeltje zichtbaar zodat spelers ze kunnen herkennen
+        float effectiveAlpha = _isScout ? Mathf.Max(alpha, 0.15f) : alpha;
+
+        _smr.enabled = effectiveAlpha > 0.005f;
 
         if (_smr.enabled)
         {
             Color c = _baseColor;
-            c.a = alpha;
+            c.a = effectiveAlpha;
+            if (_smr.material.HasProperty("_BaseColor"))
+                _smr.material.SetColor("_BaseColor", c);
+            else
+                _smr.material.SetColor("_Color", c);
+        }
+    }
+
+    public void SetScoutAppearance(bool isScout)
+    {
+        _isScout = isScout;
+        if (_smr == null) return;
+
+        // Forceer een directe kleur-update als de renderer al actief is
+        float effectiveAlpha = isScout ? Mathf.Max(_currentAlpha, 0.15f) : _currentAlpha;
+        _smr.enabled = effectiveAlpha > 0.005f;
+
+        if (_smr.enabled)
+        {
+            Color c = _baseColor;
+            c.a = effectiveAlpha;
             if (_smr.material.HasProperty("_BaseColor"))
                 _smr.material.SetColor("_BaseColor", c);
             else

@@ -45,6 +45,7 @@ public class EnemySpawner : MonoBehaviour
     private float currentEnemyHealthMultiplier = 1f;
     private float currentEnemySpeedMultiplier = 1f;
     private int currentSpawnCap;
+    private Vector3 currentSpawnDirection;
     private bool isActive;
     private bool isBreak;
 
@@ -57,7 +58,8 @@ public class EnemySpawner : MonoBehaviour
     }
 
     public void OnWaveStarted(int wave, float aggression, int maxEnemies, float spawnInterval,
-                              WaveType waveType, float healthMult, float speedMult, int spawnCap)
+                              WaveType waveType, float healthMult, float speedMult, int spawnCap,
+                              Vector3 spawnDirection)
     {
         currentWaveNumber = wave;
         currentAggressionLevel = aggression;
@@ -67,11 +69,11 @@ public class EnemySpawner : MonoBehaviour
         currentEnemyHealthMultiplier = healthMult;
         currentEnemySpeedMultiplier = speedMult;
         currentSpawnCap = spawnCap;
+        currentSpawnDirection = spawnDirection;
         isActive = true;
         isBreak = false;
         spawnTimer = 0f;
 
-        // Cleanup bestaande vijanden bij wave start (behalve eventuele scouts)
         CleanupAllEnemies();
     }
 
@@ -94,8 +96,13 @@ public class EnemySpawner : MonoBehaviour
         EnemyController controller = enemy.GetComponent<EnemyController>();
         if (controller != null)
         {
-            controller.SetWaveData(currentWaveNumber, 0.1f); // Lage agressie
-            controller.SetScoutMode(); // Scout mode: sneller, minder HP
+            controller.SetWaveData(currentWaveNumber, 0.1f);
+            controller.SetScoutMode();
+
+            // Scout dropt een kleine batterij-pickup als hij verslagen wordt
+            ScoutDropReward reward = enemy.GetComponent<ScoutDropReward>()
+                                  ?? enemy.AddComponent<ScoutDropReward>();
+            reward.Setup();
         }
 
         activeEnemies.Add(enemy);
@@ -131,7 +138,7 @@ public class EnemySpawner : MonoBehaviour
         {
             if (activeEnemies.Count >= currentSpawnCap) break;
 
-            Vector3 spawnPos = edgePoints[Random.Range(0, edgePoints.Count)];
+            Vector3 spawnPos = GetSpawnPositionInDirection(currentSpawnDirection);
             GameObject enemy = Instantiate(enemyPrefab, spawnPos, Quaternion.identity);
 
             EnemyController controller = enemy.GetComponent<EnemyController>();
@@ -139,19 +146,21 @@ public class EnemySpawner : MonoBehaviour
             {
                 controller.SetWaveData(currentWaveNumber, currentAggressionLevel);
 
-                // Pas stats aan op basis van wave type
                 if (currentWaveType == WaveType.Horde)
                     controller.SetHordeMode();
                 else if (currentWaveType == WaveType.Elite)
                     controller.SetEliteMode();
 
-                // Pas multipliers toe van difficulty/wave
-                controller.ApplyMultipliers(currentEnemyHealthMultiplier, currentEnemySpeedMultiplier);
+                // Zichtbare enemies (direct in aanvalsmodus) krijgen iets minder HP
+                // omdat ze al een voordeel hebben door meteen zichtbaar te zijn
+                bool isVisible = controller.IsInAttackMode();
+                controller.ApplyMultipliers(currentEnemyHealthMultiplier, currentEnemySpeedMultiplier, isVisible);
 
                 ApplyVariant(controller);
             }
 
             activeEnemies.Add(enemy);
+            WaveManager.Instance?.NotifyEnemySpawned();
         }
     }
 
@@ -186,6 +195,48 @@ public class EnemySpawner : MonoBehaviour
         if (roll < eliteChance) return EnemyVariant.Elite;
         if (roll < eliteChance + scoutChance) return EnemyVariant.Scout;
         return EnemyVariant.Normal;
+    }
+
+    // Kiest een spawn punt binnen een kegel rondom de opgegeven wave-richting.
+    // Dit geeft geesten een gezamenlijke aanvalsrichting terwijl ze iets gespreid blijven.
+    private Vector3 GetSpawnPositionInDirection(Vector3 direction)
+    {
+        if (edgePoints.Count == 0)
+            return Vector3.zero;
+
+        if (direction == Vector3.zero)
+            return edgePoints[Random.Range(0, edgePoints.Count)];
+
+        Vector3 dirFlat = new Vector3(direction.x, 0f, direction.z).normalized;
+        Vector3 center  = transform.position;
+
+        // Verzamel alle edge points binnen een kegel van 40° rond de richting
+        const float spreadAngle = 40f;
+        var candidates = new List<Vector3>();
+        foreach (Vector3 point in edgePoints)
+        {
+            Vector3 toPoint = point - center;
+            toPoint.y = 0f;
+            if (toPoint.sqrMagnitude < 0.01f) continue;
+            if (Vector3.Angle(dirFlat, toPoint.normalized) <= spreadAngle)
+                candidates.Add(point);
+        }
+
+        if (candidates.Count > 0)
+            return candidates[Random.Range(0, candidates.Count)];
+
+        // Fallback: dichtste edge point in de richting
+        Vector3 best  = edgePoints[0];
+        float bestDot = -2f;
+        foreach (Vector3 point in edgePoints)
+        {
+            Vector3 toPoint = point - center;
+            toPoint.y = 0f;
+            if (toPoint.sqrMagnitude < 0.01f) continue;
+            float dot = Vector3.Dot(dirFlat, toPoint.normalized);
+            if (dot > bestDot) { bestDot = dot; best = point; }
+        }
+        return best;
     }
 
     private void CleanupAllEnemies()

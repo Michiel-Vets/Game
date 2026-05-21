@@ -69,18 +69,25 @@ public static class DifficultySettings
         _ => 1f,
     };
 
+    public static float ScoutSpawnIntervalMultiplier => Current switch
+    {
+        DifficultyLevel.Easy => 1.5f,
+        DifficultyLevel.Hard => 0.5f,
+        _ => 1f,
+    };
+
     public static int SpecialWaveIntervalBonus => Current switch
     {
-        DifficultyLevel.Easy => 2,     // Minder speciale waves
-        DifficultyLevel.Hard => -1,    // Meer speciale waves
+        DifficultyLevel.Easy => 2,
+        DifficultyLevel.Hard => -1,
         _ => 0,
     };
 
-    public static float ScoutSpawnIntervalMultiplier => Current switch
+    public static float SpecialWaveMixChanceBonus => Current switch
     {
-        DifficultyLevel.Easy => 1.5f,  // Langzamer scouts
-        DifficultyLevel.Hard => 0.5f,  // Sneller scouts
-        _ => 1f,
+        DifficultyLevel.Easy => -0.2f,
+        DifficultyLevel.Hard => 0.3f,
+        _ => 0f,
     };
 
     public static void Load()
@@ -93,6 +100,4 @@ public static class DifficultySettings
         PlayerPrefs.SetInt("Difficulty", (int)Current);
         PlayerPrefs.Save();
     }
-
-
 }

@@ -1,12 +1,11 @@
 using UnityEngine;
-using System.Collections.Generic;
 
 public enum WaveType
 {
     Normal,
-    Siege,    // Non-stop spawnen, geen max limit
-    Horde,    // Meer enemies, minder HP
-    Elite     // Minder enemies, sterkere stats
+    Siege,
+    Horde,
+    Elite
 }
 
 public class WaveManager : MonoBehaviour
@@ -18,26 +17,46 @@ public class WaveManager : MonoBehaviour
     [SerializeField] private float breakDuration = 120f;
 
     [Header("Enemy Count Scaling (Normal)")]
-    [SerializeField] private int baseMaxEnemies = 5;          // Hoger: agressiever begin
+    [SerializeField] private int baseMaxEnemies = 5;
     [SerializeField] private int enemyCountIncreasePerWave = 2;
     [SerializeField] private int maxEnemyLimit = 50;
 
     [Header("Spawn Interval Scaling")]
-    [SerializeField] private float baseSpawnInterval = 5f;    // Lager: sneller spawnen
+    [SerializeField] private float baseSpawnInterval = 5f;
     [SerializeField] private float minSpawnInterval = 0.8f;
     [SerializeField] private float spawnIntervalDecreasePerWave = 0.3f;
 
     [Header("Aggression")]
-    [SerializeField] private float aggressionPerWave = 0.12f; // Sneller agressief
+    [SerializeField] private float aggressionPerWave = 0.12f;
 
     [Header("Special Waves")]
-    [SerializeField] private int initialSpecialWaveInterval = 3; // Elke 3e wave speciaal
-    [SerializeField] private int minSpecialWaveInterval = 1;     // Uiteindelijk elke wave
+    [SerializeField] private int initialSpecialWaveInterval = 3;
+    [SerializeField] private int minSpecialWaveInterval = 1;
     [SerializeField] private float specialWaveIntervalDecreasePerWave = 0.05f;
 
     [Header("Scouts During Break")]
-    [SerializeField] private int maxScoutsDuringBreak = 3;
     [SerializeField] private float scoutSpawnInterval = 12f;
+
+    [Header("Wave Direction")]
+    [SerializeField] private Transform[] waveSpawnPoints; // Pre-determined spawn points per wave
+    [SerializeField] private bool useRandomDirection = false;
+
+    [Header("Audio")]
+    [SerializeField] private AudioClip siegeWaveSound;
+    [SerializeField] private AudioClip hordeWaveSound;
+    [SerializeField] private AudioClip eliteWaveSound;
+    [SerializeField] private AudioSource audioSource;
+
+    [Header("UI")]
+    [SerializeField] private WaveProgressUI progressUI;
+    [SerializeField] private WaveTooltipUI tooltipUI;
+    [SerializeField] private WaveClearUI clearUI;
+
+    [Header("Wave Clear Penalty")]
+    [Tooltip("Maximale extra moeilijkheidsboost als een wave helemaal niet gecleared wordt (0–1).")]
+    [SerializeField, Range(0f, 1f)] private float maxClearPenalty = 0.4f;
+    [Tooltip("Siege waves tellen niet mee voor de clear-penalty.")]
+    [SerializeField] private bool siegeWavesExemptFromPenalty = true;
 
     // Runtime
     public int CurrentWave { get; private set; }
@@ -46,6 +65,12 @@ public class WaveManager : MonoBehaviour
     public float AggressionLevel { get; private set; }
     public WaveType CurrentWaveType { get; private set; }
     public bool IsSpecialWave => CurrentWaveType != WaveType.Normal;
+    public Vector3 CurrentWaveSpawnDirection { get; private set; }
+
+    // Wave-clear tracking
+    private int _waveKillCount;
+    private int _waveTotalSpawned;
+    private float _pendingPenalty;       // multiplier > 1 als vorige wave niet gecleared was
 
     private EnemySpawner spawner;
     private WaveUIController waveUI;
@@ -53,9 +78,33 @@ public class WaveManager : MonoBehaviour
     private float scoutTimer;
     private int wavesSinceLastSpecial = 0;
 
+    // Gemak-property zodat multiplier-methodes schoon blijven
+    private float ClearPenaltyMult => 1f + _pendingPenalty;
+
     private void Awake()
     {
         Instance = this;
+    }
+
+    // ── Kill / spawn tracking (aangeroepen vanuit EnemyController & EnemySpawner) ──
+
+    /// <summary>Aanroepen zodra een wave-enemy gespawnd wordt (niet scouts).</summary>
+    public void NotifyEnemySpawned()
+    {
+        if (IsBreak) return;
+        _waveTotalSpawned++;
+        clearUI?.UpdateProgress(_waveKillCount, _waveTotalSpawned);
+    }
+
+    /// <summary>Aanroepen zodra een enemy sterft (zaklamp of aanval).</summary>
+    public void NotifyEnemyKilled()
+    {
+        if (IsBreak) return;
+        _waveKillCount++;
+        clearUI?.UpdateProgress(_waveKillCount, _waveTotalSpawned);
+
+        if (_waveTotalSpawned > 0 && _waveKillCount >= _waveTotalSpawned)
+            clearUI?.ShowWaveCleared();
     }
 
     private void Start()
@@ -65,6 +114,9 @@ public class WaveManager : MonoBehaviour
         IsBreak = true;
         TimeRemaining = 0.1f;
         wavesSinceLastSpecial = 0;
+
+        if (audioSource == null)
+            audioSource = GetComponent<AudioSource>();
     }
 
     private void Update()
@@ -77,6 +129,13 @@ public class WaveManager : MonoBehaviour
         }
 
         TimeRemaining -= Time.deltaTime;
+
+        // Update progress UI
+        if (progressUI != null && !IsBreak)
+        {
+            float progress = 1f - (TimeRemaining / waveDuration);
+            progressUI.SetProgress(progress);
+        }
 
         if (TimeRemaining <= 0f)
         {
@@ -104,82 +163,141 @@ public class WaveManager : MonoBehaviour
         IsBreak = false;
         TimeRemaining = waveDuration;
 
-        // Bepaal wave type
+        // Reset kill-teller voor deze wave
+        _waveKillCount    = 0;
+        _waveTotalSpawned = 0;
+
+        // Bepaal wave type - zorg dat eerste speciale wave SIEGE is
         CurrentWaveType = DetermineWaveType();
+
+        // Eerste speciale wave moet SIEGE zijn
+        if (CurrentWaveType != WaveType.Normal && CurrentWave <= initialSpecialWaveInterval)
+        {
+            CurrentWaveType = WaveType.Siege;
+        }
+
+        // Bepaal spawn richting
+        CurrentWaveSpawnDirection = GetWaveSpawnDirection();
 
         float diffScale = DifficultySettings.AggressionScaleMultiplier;
         AggressionLevel = Mathf.Clamp01((CurrentWave - 1) * aggressionPerWave * diffScale);
 
-        // Configuratie afhankelijk van wave type
         int maxEnemies = GetWaveMaxEnemies();
         float spawnInterval = GetWaveSpawnInterval();
         float enemyHealthMultiplier = GetEnemyHealthMultiplier();
         float enemySpeedMultiplier = GetEnemySpeedMultiplier();
         int spawnCap = GetWaveSpawnCap();
 
+        // Speel audio voor speciale waves
+        PlayWaveAudio();
+
+        // Toon tooltip uitleg
+        if (tooltipUI != null && CurrentWaveType != WaveType.Normal)
+            tooltipUI.ShowTooltip(CurrentWaveType);
+
+        // Start de clear bar
+        clearUI?.OnWaveStarted(CurrentWaveType == WaveType.Siege);
+
         spawner?.OnWaveStarted(CurrentWave, AggressionLevel, maxEnemies, spawnInterval,
-                                CurrentWaveType, enemyHealthMultiplier, enemySpeedMultiplier, spawnCap);
+                                CurrentWaveType, enemyHealthMultiplier, enemySpeedMultiplier, spawnCap,
+                                CurrentWaveSpawnDirection);
         waveUI?.ShowWaveMessage(CurrentWave, CurrentWaveType);
+    }
+
+    private Vector3 GetWaveSpawnDirection()
+    {
+        if (useRandomDirection || waveSpawnPoints == null || waveSpawnPoints.Length == 0)
+        {
+            float angle = Random.Range(0f, 360f);
+            return Quaternion.Euler(0f, angle, 0f) * Vector3.forward;
+        }
+
+        int index = (CurrentWave - 1) % waveSpawnPoints.Length;
+        return waveSpawnPoints[index].position;
+    }
+
+    private void PlayWaveAudio()
+    {
+        if (audioSource == null) return;
+
+        switch (CurrentWaveType)
+        {
+            case WaveType.Siege:
+                if (siegeWaveSound != null) audioSource.PlayOneShot(siegeWaveSound);
+                break;
+            case WaveType.Horde:
+                if (hordeWaveSound != null) audioSource.PlayOneShot(hordeWaveSound);
+                break;
+            case WaveType.Elite:
+                if (eliteWaveSound != null) audioSource.PlayOneShot(eliteWaveSound);
+                break;
+        }
     }
 
     private WaveType DetermineWaveType()
     {
-        // Bereken huidige interval tussen speciale waves
         int intervalBonus = DifficultySettings.SpecialWaveIntervalBonus;
         int interval = Mathf.Max(minSpecialWaveInterval,
             Mathf.RoundToInt(initialSpecialWaveInterval - (CurrentWave - 1) * specialWaveIntervalDecreasePerWave) + intervalBonus);
 
         wavesSinceLastSpecial++;
 
-        // Nog geen special wave deze ronde?
         if (wavesSinceLastSpecial < interval && CurrentWave > 1)
             return WaveType.Normal;
 
-        // Reset teller
         wavesSinceLastSpecial = 0;
-
-        // Kies een special wave type (later combinaties)
         return ChooseSpecialWaveType();
     }
 
     private WaveType ChooseSpecialWaveType()
     {
-        // Naarmate waves vorderen, kans op mix van types
-        float mixChance = Mathf.Clamp01((CurrentWave - 5) / 20f); // Vanaf wave 5, oplopend tot ~wave 25
+        float mixChance = Mathf.Clamp01((CurrentWave - 5) / 20f);
+        mixChance += DifficultySettings.SpecialWaveMixChanceBonus;
+        mixChance = Mathf.Clamp01(mixChance);
 
         if (mixChance > Random.value && CurrentWave > 3)
         {
-            // Mix van twee types: kies er twee, geef priority aan de eerste
-            WaveType primary = (WaveType)Random.Range(1, 4);
-            WaveType secondary = (WaveType)Random.Range(1, 4);
-            // Combinatie wordt afgehandeld in EnemySpawner via wave modifiers
-            return primary; // We geven primary door, spawner leest mix uit CurrentWaveSecondaryType
+            // Mix wave - primary type
+            return (WaveType)Random.Range(1, 4);
         }
 
         return (WaveType)Random.Range(1, 4);
-    }
-
-    public WaveType GetSecondaryWaveType()
-    {
-        if (CurrentWave <= 3) return WaveType.Normal;
-        float mixChance = Mathf.Clamp01((CurrentWave - 5) / 20f);
-        if (mixChance > Random.value)
-            return (WaveType)Random.Range(1, 4);
-        return WaveType.Normal;
     }
 
     private void BeginBreak()
     {
         IsBreak = true;
         TimeRemaining = breakDuration * DifficultySettings.BreakDurationMultiplier;
-        scoutTimer = scoutSpawnInterval * 0.5f; // Eerste scout snel
+        scoutTimer = scoutSpawnInterval * 0.5f;
         spawner?.OnWaveBreak();
+
+        if (progressUI != null)
+            progressUI.SetProgress(0f);
+
+        // ── Wave-clear penalty berekening ────────────────────────────────────
+        bool exemptSiege = siegeWavesExemptFromPenalty && CurrentWaveType == WaveType.Siege;
+        if (!exemptSiege && _waveTotalSpawned > 0)
+        {
+            float clearFraction = Mathf.Clamp01((float)_waveKillCount / _waveTotalSpawned);
+            float missedFraction = 1f - clearFraction;
+            _pendingPenalty = missedFraction * maxClearPenalty;
+
+            if (_pendingPenalty > 0.01f)
+                clearUI?.ShowPenalty(ClearPenaltyMult);
+            else
+                clearUI?.OnWaveEnded();
+        }
+        else
+        {
+            _pendingPenalty = 0f;
+            clearUI?.OnWaveEnded();
+        }
     }
 
     public int GetWaveMaxEnemies()
     {
         if (CurrentWaveType == WaveType.Siege)
-            return 999; // Geen limiet tijdens siege
+            return 999;
 
         float mult = DifficultySettings.WaveEnemyCountMultiplier;
         int count = baseMaxEnemies + (CurrentWave - 1) * enemyCountIncreasePerWave;
@@ -189,7 +307,9 @@ public class WaveManager : MonoBehaviour
         else if (CurrentWaveType == WaveType.Elite)
             count = Mathf.RoundToInt(count * 0.5f);
 
-        return Mathf.Min(Mathf.RoundToInt(count * mult), maxEnemyLimit);
+        // Straf voor niet-geclearde vorige wave: meer enemies
+        count = Mathf.RoundToInt(count * mult * ClearPenaltyMult);
+        return Mathf.Min(count, maxEnemyLimit);
     }
 
     public float GetWaveSpawnInterval()
@@ -197,11 +317,13 @@ public class WaveManager : MonoBehaviour
         float interval = baseSpawnInterval - (CurrentWave - 1) * spawnIntervalDecreasePerWave;
 
         if (CurrentWaveType == WaveType.Siege)
-            interval *= 0.6f; // Sneller spawnen tijdens siege
+            interval *= 0.6f;
         else if (CurrentWaveType == WaveType.Horde)
             interval *= 0.7f;
 
-        return Mathf.Max(interval * DifficultySettings.SpawnIntervalMultiplier, minSpawnInterval);
+        // Straf: sneller spawnen (interval delen door penalty multiplier)
+        return Mathf.Max(interval * DifficultySettings.SpawnIntervalMultiplier / ClearPenaltyMult,
+                         minSpawnInterval);
     }
 
     public float GetEnemyHealthMultiplier()
@@ -212,7 +334,6 @@ public class WaveManager : MonoBehaviour
         else if (CurrentWaveType == WaveType.Elite)
             baseMult = 2.2f;
 
-        // Difficulty factor
         baseMult *= DifficultySettings.EnemyHealthMultiplier;
         return baseMult;
     }
@@ -221,7 +342,7 @@ public class WaveManager : MonoBehaviour
     {
         float baseMult = 1f;
         if (CurrentWaveType == WaveType.Elite)
-            baseMult = 0.8f; // Elite is trager maar sterker
+            baseMult = 0.8f;
         else if (CurrentWaveType == WaveType.Horde)
             baseMult = 1.15f;
 

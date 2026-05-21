@@ -38,28 +38,17 @@ public class WaveUIController : MonoBehaviour
         displayCoroutine = StartCoroutine(DisplayWave(wave, type));
     }
 
-    // AANGEPASTE COROUTINE: toont nu ook het wave type
+    private string GetWaveTypeName(WaveType type) => type switch
+    {
+        WaveType.Siege => "SIEGE WAVE",
+        WaveType.Horde => "HORDE WAVE",
+        WaveType.Elite => "ELITE WAVE",
+        _              => "WAVE",
+    };
+
     private IEnumerator DisplayWave(int wave, WaveType type)
     {
-        // Bouw de tekst op basis van wave type
-        string typeText = "";
-        switch (type)
-        {
-            case WaveType.Siege:
-                typeText = " SIEGE";
-                break;
-            case WaveType.Horde:
-                typeText = " HORDE";
-                break;
-            case WaveType.Elite:
-                typeText = " ELITE";
-                break;
-            default:
-                typeText = "";
-                break;
-        }
-
-        waveText.text = $"{GetOrdinal(wave)} wave{typeText}";
+        waveText.text = $"{GetOrdinal(wave)} {GetWaveTypeName(type)}";
 
         float t = 0f;
         while (t < fadeTime)
