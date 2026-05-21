@@ -167,14 +167,7 @@ public class WaveManager : MonoBehaviour
         _waveKillCount    = 0;
         _waveTotalSpawned = 0;
 
-        // Bepaal wave type - zorg dat eerste speciale wave SIEGE is
         CurrentWaveType = DetermineWaveType();
-
-        // Eerste speciale wave moet SIEGE zijn
-        if (CurrentWaveType != WaveType.Normal && CurrentWave <= initialSpecialWaveInterval)
-        {
-            CurrentWaveType = WaveType.Siege;
-        }
 
         // Bepaal spawn richting
         CurrentWaveSpawnDirection = GetWaveSpawnDirection();
@@ -236,13 +229,17 @@ public class WaveManager : MonoBehaviour
 
     private WaveType DetermineWaveType()
     {
+        // Wave 1 is altijd normaal
+        if (CurrentWave == 1)
+            return WaveType.Normal;
+
         int intervalBonus = DifficultySettings.SpecialWaveIntervalBonus;
         int interval = Mathf.Max(minSpecialWaveInterval,
             Mathf.RoundToInt(initialSpecialWaveInterval - (CurrentWave - 1) * specialWaveIntervalDecreasePerWave) + intervalBonus);
 
         wavesSinceLastSpecial++;
 
-        if (wavesSinceLastSpecial < interval && CurrentWave > 1)
+        if (wavesSinceLastSpecial < interval)
             return WaveType.Normal;
 
         wavesSinceLastSpecial = 0;
@@ -272,7 +269,7 @@ public class WaveManager : MonoBehaviour
         spawner?.OnWaveBreak();
 
         if (progressUI != null)
-            progressUI.SetProgress(0f);
+            progressUI.Hide();
 
         // ── Wave-clear penalty berekening ────────────────────────────────────
         bool exemptSiege = siegeWavesExemptFromPenalty && CurrentWaveType == WaveType.Siege;

@@ -35,11 +35,11 @@ public class WaveTooltipUI : MonoBehaviour
         switch (type)
         {
             case WaveType.Siege:
-                return "⚔️ SIEGE WAVE ⚔️\nEnemies spawn non-stop! Stay on the move!";
+                return "SIEGE WAVE\nEnemies spawn non-stop! Stay on the move!";
             case WaveType.Horde:
-                return "🐉 HORDE WAVE 🐉\nMore enemies, but they're weaker!";
+                return "HORDE WAVE\nMore enemies, but they're weaker!";
             case WaveType.Elite:
-                return "💀 ELITE WAVE 💀\nStronger enemies, but fewer of them!";
+                return "ELITE WAVE\nStronger enemies, but fewer of them!";
             default:
                 return "";
         }

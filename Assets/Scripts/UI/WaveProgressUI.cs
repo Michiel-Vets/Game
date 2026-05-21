@@ -20,8 +20,14 @@ public class WaveProgressUI : MonoBehaviour
         if (progressFill != null)
             progressFill.fillAmount = progress;
 
-        // Verberg aan het einde van wave
-        if (progress >= 0.99f && progressContainer != null)
+        // Verberg als de wave volledig voorbij is
+        if (progress >= 0.99f)
+            Hide();
+    }
+
+    public void Hide()
+    {
+        if (progressContainer != null)
             progressContainer.SetActive(false);
     }
 }
