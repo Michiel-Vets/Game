@@ -69,6 +69,20 @@ public static class DifficultySettings
         _ => 1f,
     };
 
+    public static int SpecialWaveIntervalBonus => Current switch
+    {
+        DifficultyLevel.Easy => 2,     // Minder speciale waves
+        DifficultyLevel.Hard => -1,    // Meer speciale waves
+        _ => 0,
+    };
+
+    public static float ScoutSpawnIntervalMultiplier => Current switch
+    {
+        DifficultyLevel.Easy => 1.5f,  // Langzamer scouts
+        DifficultyLevel.Hard => 0.5f,  // Sneller scouts
+        _ => 1f,
+    };
+
     public static void Load()
     {
         Current = (DifficultyLevel)PlayerPrefs.GetInt("Difficulty", 1);
@@ -79,4 +93,6 @@ public static class DifficultySettings
         PlayerPrefs.SetInt("Difficulty", (int)Current);
         PlayerPrefs.Save();
     }
+
+
 }

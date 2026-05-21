@@ -20,58 +20,95 @@ public class EnemySpawner : MonoBehaviour
     [SerializeField] private float raycastHeight = 20f;
     [SerializeField] private float spawnYOffset = 1f;
 
-    [Header("Elite Enemies")]
+    [Header("Elite Enemies (Normal Waves)")]
     [SerializeField] private float eliteChanceBase = 0.05f;
     [SerializeField] private float eliteChancePerWave = 0.02f;
     [SerializeField] private float eliteChanceMax = 0.30f;
 
-    [Header("Scout Enemies")]
+    [Header("Scout Enemies (Normal Waves)")]
     [SerializeField] private float scoutChanceBase = 0.10f;
     [SerializeField] private float scoutChancePerWave = 0.015f;
     [SerializeField] private float scoutChanceMax = 0.35f;
+
+    [Header("Scouts During Break")]
+    [SerializeField] private GameObject scoutPrefab; // Optioneel: aparte prefab voor scouts
 
     private readonly List<GameObject> activeEnemies = new List<GameObject>();
     private readonly List<Vector3> edgePoints = new List<Vector3>();
 
     private float spawnTimer;
-    private float currentSpawnInterval = 8f;
+    private float currentSpawnInterval;
     private int currentMaxEnemies;
     private float currentAggressionLevel;
     private int currentWaveNumber;
+    private WaveType currentWaveType;
+    private float currentEnemyHealthMultiplier = 1f;
+    private float currentEnemySpeedMultiplier = 1f;
+    private int currentSpawnCap;
     private bool isActive;
+    private bool isBreak;
 
     private void Start()
     {
         PlayerFinder.TryAssignIfNull(ref player);
-
         if (enemyPrefab == null)
             Debug.LogError("EnemySpawner: Enemy Prefab is not assigned.");
-
         BakeEdgePoints();
     }
 
-    public void OnWaveStarted(int wave, float aggression, int maxEnemies, float spawnInterval)
+    public void OnWaveStarted(int wave, float aggression, int maxEnemies, float spawnInterval,
+                              WaveType waveType, float healthMult, float speedMult, int spawnCap)
     {
         currentWaveNumber = wave;
         currentAggressionLevel = aggression;
         currentMaxEnemies = maxEnemies;
         currentSpawnInterval = spawnInterval;
+        currentWaveType = waveType;
+        currentEnemyHealthMultiplier = healthMult;
+        currentEnemySpeedMultiplier = speedMult;
+        currentSpawnCap = spawnCap;
         isActive = true;
+        isBreak = false;
         spawnTimer = 0f;
+
+        // Cleanup bestaande vijanden bij wave start (behalve eventuele scouts)
+        CleanupAllEnemies();
     }
 
     public void OnWaveBreak()
     {
         isActive = false;
+        isBreak = true;
+        // Verwijder niet alle enemies tijdens pauze - scouts blijven
+    }
+
+    public void SpawnScout()
+    {
+        if (!isBreak) return;
+        if (activeEnemies.Count >= 3) return; // Max scouts tijdens pauze
+        if (edgePoints.Count == 0) return;
+
+        Vector3 spawnPos = edgePoints[Random.Range(0, edgePoints.Count)];
+        GameObject enemy = Instantiate(scoutPrefab != null ? scoutPrefab : enemyPrefab, spawnPos, Quaternion.identity);
+
+        EnemyController controller = enemy.GetComponent<EnemyController>();
+        if (controller != null)
+        {
+            controller.SetWaveData(currentWaveNumber, 0.1f); // Lage agressie
+            controller.SetScoutMode(); // Scout mode: sneller, minder HP
+        }
+
+        activeEnemies.Add(enemy);
     }
 
     private void Update()
     {
         PlayerFinder.TryAssignIfNull(ref player);
-
-        if (enemyPrefab == null || player == null || !isActive) return;
+        if (enemyPrefab == null || player == null) return;
 
         CleanupDestroyedEnemies();
+
+        if (!isActive) return;
 
         spawnTimer += Time.deltaTime;
         if (spawnTimer >= currentSpawnInterval)
@@ -83,20 +120,39 @@ public class EnemySpawner : MonoBehaviour
 
     private void SpawnEnemies()
     {
-        if (activeEnemies.Count >= currentMaxEnemies) return;
+        if (activeEnemies.Count >= currentSpawnCap) return;
         if (edgePoints.Count == 0) return;
 
-        Vector3 spawnPos = edgePoints[Random.Range(0, edgePoints.Count)];
-        GameObject enemy = Instantiate(enemyPrefab, spawnPos, Quaternion.identity);
+        int toSpawn = 1;
+        if (currentWaveType == WaveType.Horde && currentWaveNumber > 3)
+            toSpawn = Random.Range(1, 4); // Meerdere tegelijk spawnen
 
-        EnemyController controller = enemy.GetComponent<EnemyController>();
-        if (controller != null)
+        for (int i = 0; i < toSpawn; i++)
         {
-            controller.SetWaveData(currentWaveNumber, currentAggressionLevel);
-            ApplyVariant(controller);
-        }
+            if (activeEnemies.Count >= currentSpawnCap) break;
 
-        activeEnemies.Add(enemy);
+            Vector3 spawnPos = edgePoints[Random.Range(0, edgePoints.Count)];
+            GameObject enemy = Instantiate(enemyPrefab, spawnPos, Quaternion.identity);
+
+            EnemyController controller = enemy.GetComponent<EnemyController>();
+            if (controller != null)
+            {
+                controller.SetWaveData(currentWaveNumber, currentAggressionLevel);
+
+                // Pas stats aan op basis van wave type
+                if (currentWaveType == WaveType.Horde)
+                    controller.SetHordeMode();
+                else if (currentWaveType == WaveType.Elite)
+                    controller.SetEliteMode();
+
+                // Pas multipliers toe van difficulty/wave
+                controller.ApplyMultipliers(currentEnemyHealthMultiplier, currentEnemySpeedMultiplier);
+
+                ApplyVariant(controller);
+            }
+
+            activeEnemies.Add(enemy);
+        }
     }
 
     private void ApplyVariant(EnemyController controller)
@@ -120,10 +176,32 @@ public class EnemySpawner : MonoBehaviour
         float scoutChance = Mathf.Min(
             scoutChanceBase + scoutChancePerWave * (currentWaveNumber - 1), scoutChanceMax);
 
+        // Tijdens Horde waves meer scouts, tijdens Elite meer elites
+        if (currentWaveType == WaveType.Horde)
+            scoutChance *= 1.5f;
+        else if (currentWaveType == WaveType.Elite)
+            eliteChance *= 2f;
+
         float roll = Random.value;
         if (roll < eliteChance) return EnemyVariant.Elite;
         if (roll < eliteChance + scoutChance) return EnemyVariant.Scout;
         return EnemyVariant.Normal;
+    }
+
+    private void CleanupAllEnemies()
+    {
+        foreach (var enemy in activeEnemies)
+            if (enemy != null) Destroy(enemy);
+        activeEnemies.Clear();
+    }
+
+    private void CleanupDestroyedEnemies()
+    {
+        for (int i = activeEnemies.Count - 1; i >= 0; i--)
+        {
+            if (activeEnemies[i] == null)
+                activeEnemies.RemoveAt(i);
+        }
     }
 
     private void BakeEdgePoints()
@@ -163,18 +241,6 @@ public class EnemySpawner : MonoBehaviour
 
             if (foundAny && edgePoints.Count == i)
                 edgePoints.Add(lastValidPoint + Vector3.up * spawnYOffset);
-        }
-
-        if (edgePoints.Count == 0)
-            Debug.LogWarning("EnemySpawner: No edge points found. Check groundLayer and edgeScanRadius.");
-    }
-
-    private void CleanupDestroyedEnemies()
-    {
-        for (int i = activeEnemies.Count - 1; i >= 0; i--)
-        {
-            if (activeEnemies[i] == null)
-                activeEnemies.RemoveAt(i);
         }
     }
 

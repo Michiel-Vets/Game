@@ -430,6 +430,21 @@ public class EnemyController : MonoBehaviour
         ApplyAggressionStats(aggressionLevel);
     }
 
+    public void SetHordeMode()
+    {
+        moveSpeed *= 1.2f;
+        // HP wordt elders verlaagd via multiplier
+        transform.localScale *= 0.8f;
+        originalScale = transform.localScale;
+    }
+
+    public void ApplyMultipliers(float healthMult, float speedMult)
+    {
+        moveSpeed *= speedMult;
+        flashlightKillTime *= healthMult;
+        flashlightKillTime = Mathf.Max(0.3f, flashlightKillTime);
+    }
+
     private void ApplyAggressionStats(float antT = 0f)
     {
         float t = (aggressionSpectrum + 1f) * 0.5f;

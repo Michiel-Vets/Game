@@ -30,16 +30,36 @@ public class WaveUIController : MonoBehaviour
         return mod10 switch { 1 => $"{n}st", 2 => $"{n}nd", 3 => $"{n}rd", _ => $"{n}th" };
     }
 
-    public void ShowWaveMessage(int wave)
+    // NIEUWE METHODE: met WaveType parameter
+    public void ShowWaveMessage(int wave, WaveType type)
     {
         if (waveText == null) return;
         if (displayCoroutine != null) StopCoroutine(displayCoroutine);
-        displayCoroutine = StartCoroutine(DisplayWave(wave));
+        displayCoroutine = StartCoroutine(DisplayWave(wave, type));
     }
 
-    private IEnumerator DisplayWave(int wave)
+    // AANGEPASTE COROUTINE: toont nu ook het wave type
+    private IEnumerator DisplayWave(int wave, WaveType type)
     {
-        waveText.text = $"{GetOrdinal(wave)} wave";
+        // Bouw de tekst op basis van wave type
+        string typeText = "";
+        switch (type)
+        {
+            case WaveType.Siege:
+                typeText = " SIEGE";
+                break;
+            case WaveType.Horde:
+                typeText = " HORDE";
+                break;
+            case WaveType.Elite:
+                typeText = " ELITE";
+                break;
+            default:
+                typeText = "";
+                break;
+        }
+
+        waveText.text = $"{GetOrdinal(wave)} wave{typeText}";
 
         float t = 0f;
         while (t < fadeTime)
