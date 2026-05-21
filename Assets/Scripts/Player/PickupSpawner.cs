@@ -16,16 +16,20 @@ public class PickupSpawner : MonoBehaviour
     [SerializeField] private float healthSpawnInterval = 20f;
 
     [Header("Spawn Zone")]
-    [SerializeField] private float spawnRadius = 20f;
-    [SerializeField] private float minDistanceFromPlayer = 5f;
+    [SerializeField] private float spawnRadius = 120f;
+    [SerializeField] private float minDistanceFromPlayer = 10f;
 
     [Header("Ground Detection")]
     [SerializeField] private LayerMask groundLayer;
-    [SerializeField] private float raycastHeight = 20f;
+    [SerializeField] private float raycastHeight = 50f;
     [SerializeField] private float spawnYOffset = 1f;
 
-    private readonly List<GameObject> activeBatteryPickups = new List<GameObject>();
-    private readonly List<GameObject> activeHealthPickups = new List<GameObject>();
+    [Header("Vegetation Blocking")]
+    [SerializeField] private LayerMask vegetationLayer;
+    [SerializeField] private float vegetationCheckRadius = 2f;
+
+    private readonly List<GameObject> activeBatteryPickups = new();
+    private readonly List<GameObject> activeHealthPickups = new();
 
     private Transform player;
     private float batteryTimer;
@@ -40,13 +44,23 @@ public class PickupSpawner : MonoBehaviour
     private void ApplyDifficulty()
     {
         DifficultySettings.Load();
-        maxBatteryPickups = Mathf.Max(1, Mathf.RoundToInt(maxBatteryPickups * DifficultySettings.PickupMaxMultiplier));
-        maxHealthPickups = Mathf.Max(1, Mathf.RoundToInt(maxHealthPickups * DifficultySettings.PickupMaxMultiplier));
+
+        maxBatteryPickups =
+            Mathf.Max(1,
+            Mathf.RoundToInt(maxBatteryPickups *
+            DifficultySettings.PickupMaxMultiplier));
+
+        maxHealthPickups =
+            Mathf.Max(1,
+            Mathf.RoundToInt(maxHealthPickups *
+            DifficultySettings.PickupMaxMultiplier));
+
         batterySpawnInterval *= DifficultySettings.PickupIntervalMultiplier;
         healthSpawnInterval *= DifficultySettings.PickupIntervalMultiplier;
 
         batteryTimer = batterySpawnInterval;
         healthTimer = healthSpawnInterval;
+
         difficultyApplied = true;
     }
 
@@ -65,17 +79,21 @@ public class PickupSpawner : MonoBehaviour
         CleanupDestroyed(activeHealthPickups);
 
         batteryTimer -= Time.deltaTime;
+
         if (batteryTimer <= 0f)
         {
             batteryTimer = batterySpawnInterval;
+
             if (activeBatteryPickups.Count < maxBatteryPickups)
                 TrySpawn(batteryPickupPrefab, activeBatteryPickups);
         }
 
         healthTimer -= Time.deltaTime;
+
         if (healthTimer <= 0f)
         {
             healthTimer = healthSpawnInterval;
+
             if (activeHealthPickups.Count < maxHealthPickups)
                 TrySpawn(healthPickupPrefab, activeHealthPickups);
         }
@@ -85,21 +103,46 @@ public class PickupSpawner : MonoBehaviour
     {
         if (prefab == null) return;
 
-        for (int attempt = 0; attempt < 10; attempt++)
+        for (int attempt = 0; attempt < 25; attempt++)
         {
             Vector2 random2D = Random.insideUnitCircle * spawnRadius;
-            Vector3 candidate = transform.position + new Vector3(random2D.x, 0f, random2D.y);
 
-            if (Vector3.Distance(candidate, player.position) < minDistanceFromPlayer)
+            Vector3 candidate =
+                player.position +
+                new Vector3(random2D.x, 0f, random2D.y);
+
+            if (Vector3.Distance(candidate, player.position)
+                < minDistanceFromPlayer)
                 continue;
 
-            Vector3 rayOrigin = candidate + Vector3.up * raycastHeight;
-            if (!Physics.Raycast(rayOrigin, Vector3.down, out RaycastHit hit,
-                raycastHeight * 2f, groundLayer, QueryTriggerInteraction.Ignore))
+            Vector3 rayOrigin =
+                candidate + Vector3.up * raycastHeight;
+
+            if (!Physics.Raycast(
+                rayOrigin,
+                Vector3.down,
+                out RaycastHit hit,
+                raycastHeight * 2f,
+                groundLayer,
+                QueryTriggerInteraction.Ignore))
                 continue;
 
-            Vector3 spawnPos = hit.point + Vector3.up * spawnYOffset;
-            GameObject pickup = Instantiate(prefab, spawnPos, Quaternion.identity);
+            Vector3 spawnPos =
+                hit.point + Vector3.up * spawnYOffset;
+
+            bool blocked =
+                Physics.CheckSphere(
+                    spawnPos,
+                    vegetationCheckRadius,
+                    vegetationLayer,
+                    QueryTriggerInteraction.Ignore);
+
+            if (blocked)
+                continue;
+
+            GameObject pickup =
+                Instantiate(prefab, spawnPos, Quaternion.identity);
+
             list.Add(pickup);
             return;
         }
@@ -117,9 +160,14 @@ public class PickupSpawner : MonoBehaviour
     private void OnDrawGizmosSelected()
     {
         Gizmos.color = Color.green;
-        Gizmos.DrawWireSphere(transform.position, spawnRadius);
-        Gizmos.color = Color.yellow;
+
         if (player != null)
-            Gizmos.DrawWireSphere(player.position, minDistanceFromPlayer);
+            Gizmos.DrawWireSphere(player.position, spawnRadius);
+
+        Gizmos.color = Color.yellow;
+
+        if (player != null)
+            Gizmos.DrawWireSphere(player.position,
+                minDistanceFromPlayer);
     }
 }
