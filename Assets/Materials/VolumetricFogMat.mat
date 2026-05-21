@@ -106,7 +106,7 @@ Material:
     - _DstBlend: 0
     - _DstBlendAlpha: 0
     - _EnvironmentReflections: 1
-    - _FadeStartY: 72
+    - _FadeStartY: 0
     - _FlashlightScatterStrength: 6
     - _FloorY: 0
     - _FogHeight: 7
