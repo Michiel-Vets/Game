@@ -209,7 +209,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!224 &50764982
 RectTransform:
   m_ObjectHideFlags: 0
@@ -2575,7 +2575,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!224 &523815065
 RectTransform:
   m_ObjectHideFlags: 0
@@ -4308,6 +4308,12 @@ MonoBehaviour:
     m_Bits: 128
   raycastHeight: 20
   spawnYOffset: 0.5
+  eliteChanceBase: 0.05
+  eliteChancePerWave: 0.02
+  eliteChanceMax: 0.3
+  scoutChanceBase: 0.1
+  scoutChancePerWave: 0.015
+  scoutChanceMax: 0.35
 --- !u!4 &1095565199
 Transform:
   m_ObjectHideFlags: 0
@@ -4782,7 +4788,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!224 &1314206967
 RectTransform:
   m_ObjectHideFlags: 0
@@ -4948,7 +4954,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!224 &1319553968
 RectTransform:
   m_ObjectHideFlags: 0
@@ -5174,11 +5180,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 46090c4c1bfc10842b4a82e5ca67a5cd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HealthController
-  maxHealth: 100
-  currentHealth: 0
-  healthBar: {fileID: 0}
-  fullWidth: 200
-  barHeight: 20
 --- !u!1 &1376704269
 GameObject:
   m_ObjectHideFlags: 0
@@ -5836,11 +5837,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 46090c4c1bfc10842b4a82e5ca67a5cd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HealthController
-  maxHealth: 100
-  currentHealth: 0
-  healthBar: {fileID: 0}
-  fullWidth: 200
-  barHeight: 20
 --- !u!114 &1444180903
 MonoBehaviour:
   m_ObjectHideFlags: 0

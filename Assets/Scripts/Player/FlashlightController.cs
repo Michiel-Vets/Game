@@ -34,19 +34,19 @@ public class FlashlightController : MonoBehaviour
     private static readonly int PropRange = Shader.PropertyToID("_FlashlightRange");
     private static readonly int PropEnabled = Shader.PropertyToID("_FlashlightEnabled");
 
-    void Awake()
+    private void Awake()
     {
         if (flashlight == null)
             flashlight = GetComponent<Light>();
     }
 
-    void Start()
+    private void Start()
     {
         isOn = startsOn;
         ApplyState();
     }
 
-    void Update()
+    private void Update()
     {
         if (isOn)
         {
@@ -119,9 +119,10 @@ public class FlashlightController : MonoBehaviour
             effectiveDistance = obstacleHit.distance;
         }
 
-        RaycastHit[] hits = Physics.SphereCastAll(origin, hitRadius, direction, effectiveDistance, enemyLayers);
-        HashSet<EnemyController> litThisFrame = new HashSet<EnemyController>();
+        RaycastHit[] hits = Physics.SphereCastAll(
+            origin, hitRadius, direction, effectiveDistance, enemyLayers);
 
+        HashSet<EnemyController> litThisFrame = new HashSet<EnemyController>();
         float halfSpotAngle = flashlight != null ? flashlight.spotAngle * 0.5f : 30f;
 
         foreach (RaycastHit hit in hits)
@@ -140,7 +141,10 @@ public class FlashlightController : MonoBehaviour
             float visibility = angleVis * effectFactor;
 
             enemy.SetTargetVisibility(visibility);
-            enemy.ReceiveFlashlightHit(effectFactor);
+
+            // Geef de zaklamprichting mee zodat geesten er actief van weg kunnen sturen
+            enemy.ReceiveFlashlightHit(effectFactor, direction);
+
             litThisFrame.Add(enemy);
         }
 

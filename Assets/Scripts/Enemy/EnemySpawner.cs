@@ -3,6 +3,8 @@ using UnityEngine;
 
 public class EnemySpawner : MonoBehaviour
 {
+    private enum EnemyVariant { Normal, Elite, Scout }
+
     [Header("References")]
     [SerializeField] private GameObject enemyPrefab;
     [SerializeField] private Transform player;
@@ -17,6 +19,16 @@ public class EnemySpawner : MonoBehaviour
     [SerializeField] private LayerMask groundLayer;
     [SerializeField] private float raycastHeight = 20f;
     [SerializeField] private float spawnYOffset = 1f;
+
+    [Header("Elite Enemies")]
+    [SerializeField] private float eliteChanceBase = 0.05f;
+    [SerializeField] private float eliteChancePerWave = 0.02f;
+    [SerializeField] private float eliteChanceMax = 0.30f;
+
+    [Header("Scout Enemies")]
+    [SerializeField] private float scoutChanceBase = 0.10f;
+    [SerializeField] private float scoutChancePerWave = 0.015f;
+    [SerializeField] private float scoutChanceMax = 0.35f;
 
     private readonly List<GameObject> activeEnemies = new List<GameObject>();
     private readonly List<Vector3> edgePoints = new List<Vector3>();
@@ -79,9 +91,39 @@ public class EnemySpawner : MonoBehaviour
 
         EnemyController controller = enemy.GetComponent<EnemyController>();
         if (controller != null)
+        {
             controller.SetWaveData(currentWaveNumber, currentAggressionLevel);
+            ApplyVariant(controller);
+        }
 
         activeEnemies.Add(enemy);
+    }
+
+    private void ApplyVariant(EnemyController controller)
+    {
+        EnemyVariant variant = RollVariant();
+        switch (variant)
+        {
+            case EnemyVariant.Elite:
+                controller.SetEliteMode();
+                break;
+            case EnemyVariant.Scout:
+                controller.SetScoutMode();
+                break;
+        }
+    }
+
+    private EnemyVariant RollVariant()
+    {
+        float eliteChance = Mathf.Min(
+            eliteChanceBase + eliteChancePerWave * (currentWaveNumber - 1), eliteChanceMax);
+        float scoutChance = Mathf.Min(
+            scoutChanceBase + scoutChancePerWave * (currentWaveNumber - 1), scoutChanceMax);
+
+        float roll = Random.value;
+        if (roll < eliteChance) return EnemyVariant.Elite;
+        if (roll < eliteChance + scoutChance) return EnemyVariant.Scout;
+        return EnemyVariant.Normal;
     }
 
     private void BakeEdgePoints()
