@@ -261,6 +261,12 @@ public class WaveManager : MonoBehaviour
         return (WaveType)Random.Range(1, 4);
     }
 
+    public void SkipToNextWave()
+    {
+        if (!IsBreak) return;
+        TimeRemaining = 0f;
+    }
+
     private void BeginBreak()
     {
         IsBreak = true;

@@ -37,14 +37,14 @@ public static class DifficultySettings
     public static float PickupMaxMultiplier => Current switch
     {
         DifficultyLevel.Easy => 1.5f,
-        DifficultyLevel.Hard => 0.5f,
+        DifficultyLevel.Hard => 2.0f,
         _ => 1f,
     };
 
     public static float PickupIntervalMultiplier => Current switch
     {
         DifficultyLevel.Easy => 0.6f,
-        DifficultyLevel.Hard => 2.0f,
+        DifficultyLevel.Hard => 0.5f,
         _ => 1f,
     };
 
@@ -65,7 +65,7 @@ public static class DifficultySettings
     public static float WaveEnemyCountMultiplier => Current switch
     {
         DifficultyLevel.Easy => 0.6f,
-        DifficultyLevel.Hard => 1.5f,
+        DifficultyLevel.Hard => 2.0f,
         _ => 1f,
     };
 

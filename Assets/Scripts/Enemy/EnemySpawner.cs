@@ -70,11 +70,20 @@ public class EnemySpawner : MonoBehaviour
         currentEnemySpeedMultiplier = speedMult;
         currentSpawnCap = spawnCap;
         currentSpawnDirection = spawnDirection;
-        isActive = true;
         isBreak = false;
         spawnTimer = 0f;
 
         CleanupAllEnemies();
+
+        if (currentWaveType == WaveType.Siege)
+        {
+            isActive = true;
+        }
+        else
+        {
+            isActive = false;
+            SpawnAllAtOnce();
+        }
     }
 
     public void OnWaveBreak()
@@ -125,43 +134,46 @@ public class EnemySpawner : MonoBehaviour
         }
     }
 
+    private void SpawnAllAtOnce()
+    {
+        for (int i = 0; i < currentSpawnCap; i++)
+        {
+            if (activeEnemies.Count >= currentSpawnCap) break;
+            SpawnSingleEnemy();
+        }
+    }
+
     private void SpawnEnemies()
     {
         if (activeEnemies.Count >= currentSpawnCap) return;
+        SpawnSingleEnemy();
+    }
+
+    private void SpawnSingleEnemy()
+    {
         if (edgePoints.Count == 0) return;
 
-        int toSpawn = 1;
-        if (currentWaveType == WaveType.Horde && currentWaveNumber > 3)
-            toSpawn = Random.Range(1, 4); // Meerdere tegelijk spawnen
+        Vector3 spawnPos = GetSpawnPositionInDirection(currentSpawnDirection);
+        GameObject enemy = Instantiate(enemyPrefab, spawnPos, Quaternion.identity);
 
-        for (int i = 0; i < toSpawn; i++)
+        EnemyController controller = enemy.GetComponent<EnemyController>();
+        if (controller != null)
         {
-            if (activeEnemies.Count >= currentSpawnCap) break;
+            controller.SetWaveData(currentWaveNumber, currentAggressionLevel);
 
-            Vector3 spawnPos = GetSpawnPositionInDirection(currentSpawnDirection);
-            GameObject enemy = Instantiate(enemyPrefab, spawnPos, Quaternion.identity);
+            if (currentWaveType == WaveType.Horde)
+                controller.SetHordeMode();
+            else if (currentWaveType == WaveType.Elite)
+                controller.SetEliteMode();
 
-            EnemyController controller = enemy.GetComponent<EnemyController>();
-            if (controller != null)
-            {
-                controller.SetWaveData(currentWaveNumber, currentAggressionLevel);
+            bool isVisible = controller.IsInAttackMode();
+            controller.ApplyMultipliers(currentEnemyHealthMultiplier, currentEnemySpeedMultiplier, isVisible);
 
-                if (currentWaveType == WaveType.Horde)
-                    controller.SetHordeMode();
-                else if (currentWaveType == WaveType.Elite)
-                    controller.SetEliteMode();
-
-                // Zichtbare enemies (direct in aanvalsmodus) krijgen iets minder HP
-                // omdat ze al een voordeel hebben door meteen zichtbaar te zijn
-                bool isVisible = controller.IsInAttackMode();
-                controller.ApplyMultipliers(currentEnemyHealthMultiplier, currentEnemySpeedMultiplier, isVisible);
-
-                ApplyVariant(controller);
-            }
-
-            activeEnemies.Add(enemy);
-            WaveManager.Instance?.NotifyEnemySpawned();
+            ApplyVariant(controller);
         }
+
+        activeEnemies.Add(enemy);
+        WaveManager.Instance?.NotifyEnemySpawned();
     }
 
     private void ApplyVariant(EnemyController controller)
