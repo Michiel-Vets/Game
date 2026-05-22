@@ -265,6 +265,7 @@ public class EnemyController : MonoBehaviour
 
     private float waveAggressionLevel = 0f;
     private int currentWaveNumber = 0;
+    private float _baseSpeed; // Inspector-waarde vóór alle multipliers, voor speed cap
     private float retreatTimer;
     private Vector3 retreatDirection;
 
@@ -275,6 +276,7 @@ public class EnemyController : MonoBehaviour
 
     private void Awake()
     {
+        _baseSpeed = moveSpeed; // sla originele Inspector-waarde op vóór welke multiplier dan ook
         rb = GetComponent<Rigidbody>();
         rb.useGravity = false;
         rb.isKinematic = false;
@@ -450,6 +452,7 @@ public class EnemyController : MonoBehaviour
     public void ApplyMultipliers(float healthMult, float speedMult, bool isVisible = false)
     {
         moveSpeed *= speedMult;
+        moveSpeed = Mathf.Min(moveSpeed, _baseSpeed * 2f); // max 2× originele snelheid
         float effectiveHealthMult = isVisible ? healthMult * 0.6f : healthMult;
         flashlightKillTime *= effectiveHealthMult;
         flashlightKillTime = Mathf.Max(0.3f, flashlightKillTime);
@@ -461,6 +464,7 @@ public class EnemyController : MonoBehaviour
         float t = (aggressionSpectrum + 1f) * 0.5f;
 
         moveSpeed *= Mathf.Lerp(speedMultiplierMin, speedMultiplierMax, t);
+        moveSpeed = Mathf.Min(moveSpeed, _baseSpeed * 2f); // cap ook na aggression scaling
         damagePercentage *= Mathf.Lerp(damageMultiplierMin, damageMultiplierMax, t);
         lungeTriggerDistance *= Mathf.Lerp(lungeDistanceMultiplierMin, lungeDistanceMultiplierMax, t);
         lungeSpeed *= Mathf.Lerp(lungeSpeedMultiplierMin, lungeSpeedMultiplierMax, t);

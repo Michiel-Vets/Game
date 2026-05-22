@@ -64,8 +64,8 @@ public static class DifficultySettings
 
     public static float WaveEnemyCountMultiplier => Current switch
     {
-        DifficultyLevel.Easy => 0.6f,
-        DifficultyLevel.Hard => 2.0f,
+        DifficultyLevel.Easy => 0.67f,  // 6 * 0.67 ≈ 4 op wave 1
+        DifficultyLevel.Hard => 1.67f,  // 6 * 1.67 ≈ 10 op wave 1
         _ => 1f,
     };
 

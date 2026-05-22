@@ -15,6 +15,11 @@ public class EnemySpawner : MonoBehaviour
     [SerializeField] private float edgeInsetDistance = 1f;
     [SerializeField] private int edgeSampleAngles = 36;
 
+    [Header("Map Scaling")]
+    [Tooltip("Hoe ver de map maximaal kan groeien t.o.v. de startgrootte (0 = geen groei, 1 = 2× startgrootte).")]
+    [SerializeField] private float mapGrowthScale = 0.5f;
+    [SerializeField] private float maxEdgeScanRadius = 90f;
+
     [Header("Ground Detection")]
     [SerializeField] private LayerMask groundLayer;
     [SerializeField] private float raycastHeight = 20f;
@@ -31,10 +36,18 @@ public class EnemySpawner : MonoBehaviour
     [SerializeField] private float scoutChanceMax = 0.35f;
 
     [Header("Scouts During Break")]
-    [SerializeField] private GameObject scoutPrefab; // Optioneel: aparte prefab voor scouts
+    [SerializeField] private GameObject scoutPrefab;
+
+    [Header("Group Spawning (Non-Siege Waves)")]
+    [Tooltip("Aantal enemies per groep.")]
+    [SerializeField] private int enemiesPerGroup = 4;
+    [Tooltip("Seconden tussen groepen.")]
+    [SerializeField] private float groupSpawnInterval = 8f;
 
     private readonly List<GameObject> activeEnemies = new List<GameObject>();
     private readonly List<Vector3> edgePoints = new List<Vector3>();
+
+    private float _baseEdgeScanRadius;
 
     private float spawnTimer;
     private float currentSpawnInterval;
@@ -49,11 +62,16 @@ public class EnemySpawner : MonoBehaviour
     private bool isActive;
     private bool isBreak;
 
+    // Groepsspawn state
+    private int _remainingToSpawn;
+    private float _groupTimer;
+
     private void Start()
     {
         PlayerFinder.TryAssignIfNull(ref player);
         if (enemyPrefab == null)
             Debug.LogError("EnemySpawner: Enemy Prefab is not assigned.");
+        _baseEdgeScanRadius = edgeScanRadius;
         BakeEdgePoints();
     }
 
@@ -73,16 +91,22 @@ public class EnemySpawner : MonoBehaviour
         isBreak = false;
         spawnTimer = 0f;
 
+        // Map meeschalen met enemy count
+        UpdateMapRadius(maxEnemies);
+
         CleanupAllEnemies();
 
         if (currentWaveType == WaveType.Siege)
         {
+            // Siege: timer-based spawning zoals voorheen
             isActive = true;
         }
         else
         {
-            isActive = false;
-            SpawnAllAtOnce();
+            // Andere waves: groepen spawnen doorheen de wave
+            _remainingToSpawn = currentSpawnCap;
+            _groupTimer = 0f; // eerste groep meteen
+            isActive = true;
         }
     }
 
@@ -90,13 +114,12 @@ public class EnemySpawner : MonoBehaviour
     {
         isActive = false;
         isBreak = true;
-        // Verwijder niet alle enemies tijdens pauze - scouts blijven
     }
 
     public void SpawnScout()
     {
         if (!isBreak) return;
-        if (activeEnemies.Count >= 3) return; // Max scouts tijdens pauze
+        if (activeEnemies.Count >= 3) return;
         if (edgePoints.Count == 0) return;
 
         Vector3 spawnPos = edgePoints[Random.Range(0, edgePoints.Count)];
@@ -108,7 +131,6 @@ public class EnemySpawner : MonoBehaviour
             controller.SetWaveData(currentWaveNumber, 0.1f);
             controller.SetScoutMode();
 
-            // Scout dropt een kleine batterij-pickup als hij verslagen wordt
             ScoutDropReward reward = enemy.GetComponent<ScoutDropReward>()
                                   ?? enemy.AddComponent<ScoutDropReward>();
             reward.Setup();
@@ -126,34 +148,55 @@ public class EnemySpawner : MonoBehaviour
 
         if (!isActive) return;
 
-        spawnTimer += Time.deltaTime;
-        if (spawnTimer >= currentSpawnInterval)
+        if (currentWaveType == WaveType.Siege)
         {
-            spawnTimer = 0f;
-            SpawnEnemies();
+            // Siege: één enemy tegelijk op interval
+            spawnTimer += Time.deltaTime;
+            if (spawnTimer >= currentSpawnInterval)
+            {
+                spawnTimer = 0f;
+                if (activeEnemies.Count < currentSpawnCap)
+                    SpawnSingleEnemy(currentSpawnDirection);
+            }
+        }
+        else
+        {
+            // Andere waves: groepen op interval
+            if (_remainingToSpawn <= 0) return;
+
+            _groupTimer -= Time.deltaTime;
+            if (_groupTimer <= 0f)
+                SpawnGroup();
         }
     }
 
-    private void SpawnAllAtOnce()
+    // ── Groepsspawn ───────────────────────────────────────────────────────────
+
+    private void SpawnGroup()
     {
-        for (int i = 0; i < currentSpawnCap; i++)
+        // Elke groep uit een andere willekeurige richting
+        float angle = Random.Range(0f, 360f);
+        Vector3 groupDir = Quaternion.Euler(0f, angle, 0f) * Vector3.forward;
+
+        int toSpawn = Mathf.Min(enemiesPerGroup, _remainingToSpawn);
+        for (int i = 0; i < toSpawn; i++)
         {
             if (activeEnemies.Count >= currentSpawnCap) break;
-            SpawnSingleEnemy();
+            SpawnSingleEnemy(groupDir);
+            _remainingToSpawn--;
         }
+
+        _groupTimer = groupSpawnInterval;
+
+        if (_remainingToSpawn <= 0)
+            isActive = false;
     }
 
-    private void SpawnEnemies()
-    {
-        if (activeEnemies.Count >= currentSpawnCap) return;
-        SpawnSingleEnemy();
-    }
-
-    private void SpawnSingleEnemy()
+    private void SpawnSingleEnemy(Vector3 direction)
     {
         if (edgePoints.Count == 0) return;
 
-        Vector3 spawnPos = GetSpawnPositionInDirection(currentSpawnDirection);
+        Vector3 spawnPos = GetSpawnPositionInDirection(direction);
         GameObject enemy = Instantiate(enemyPrefab, spawnPos, Quaternion.identity);
 
         EnemyController controller = enemy.GetComponent<EnemyController>();
@@ -176,6 +219,29 @@ public class EnemySpawner : MonoBehaviour
         WaveManager.Instance?.NotifyEnemySpawned();
     }
 
+    // ── Map radius schalen ────────────────────────────────────────────────────
+
+    private void UpdateMapRadius(int enemyCount)
+    {
+        if (enemyCount <= 0) return;
+
+        float t = Mathf.Clamp01((float)enemyCount / 50f) * mapGrowthScale;
+        float newRadius = Mathf.Lerp(_baseEdgeScanRadius, maxEdgeScanRadius, t);
+        newRadius = Mathf.Clamp(newRadius, _baseEdgeScanRadius, maxEdgeScanRadius);
+
+        if (Mathf.Abs(newRadius - edgeScanRadius) > 1f)
+        {
+            edgeScanRadius = newRadius;
+            BakeEdgePoints();
+
+            // Mist world size meeschalen
+            float mistSize = newRadius * 2f;
+            MistTrailController.Instance?.SetWorldSize(mistSize);
+        }
+    }
+
+    // ── Variant ───────────────────────────────────────────────────────────────
+
     private void ApplyVariant(EnemyController controller)
     {
         EnemyVariant variant = RollVariant();
@@ -197,7 +263,6 @@ public class EnemySpawner : MonoBehaviour
         float scoutChance = Mathf.Min(
             scoutChanceBase + scoutChancePerWave * (currentWaveNumber - 1), scoutChanceMax);
 
-        // Tijdens Horde waves meer scouts, tijdens Elite meer elites
         if (currentWaveType == WaveType.Horde)
             scoutChance *= 1.5f;
         else if (currentWaveType == WaveType.Elite)
@@ -209,8 +274,8 @@ public class EnemySpawner : MonoBehaviour
         return EnemyVariant.Normal;
     }
 
-    // Kiest een spawn punt binnen een kegel rondom de opgegeven wave-richting.
-    // Dit geeft geesten een gezamenlijke aanvalsrichting terwijl ze iets gespreid blijven.
+    // ── Spawn position ────────────────────────────────────────────────────────
+
     private Vector3 GetSpawnPositionInDirection(Vector3 direction)
     {
         if (edgePoints.Count == 0)
@@ -222,7 +287,6 @@ public class EnemySpawner : MonoBehaviour
         Vector3 dirFlat = new Vector3(direction.x, 0f, direction.z).normalized;
         Vector3 center  = transform.position;
 
-        // Verzamel alle edge points binnen een kegel van 40° rond de richting
         const float spreadAngle = 40f;
         var candidates = new List<Vector3>();
         foreach (Vector3 point in edgePoints)
@@ -237,7 +301,6 @@ public class EnemySpawner : MonoBehaviour
         if (candidates.Count > 0)
             return candidates[Random.Range(0, candidates.Count)];
 
-        // Fallback: dichtste edge point in de richting
         Vector3 best  = edgePoints[0];
         float bestDot = -2f;
         foreach (Vector3 point in edgePoints)
@@ -250,6 +313,8 @@ public class EnemySpawner : MonoBehaviour
         }
         return best;
     }
+
+    // ── Cleanup ───────────────────────────────────────────────────────────────
 
     private void CleanupAllEnemies()
     {
@@ -266,6 +331,8 @@ public class EnemySpawner : MonoBehaviour
                 activeEnemies.RemoveAt(i);
         }
     }
+
+    // ── Edge baking ───────────────────────────────────────────────────────────
 
     private void BakeEdgePoints()
     {

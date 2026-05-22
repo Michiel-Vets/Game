@@ -3,6 +3,8 @@ using System.Collections.Generic;
 
 public class MistTrailController : MonoBehaviour
 {
+    public static MistTrailController Instance { get; private set; }
+
     [SerializeField] private int resolution = 256;
     [SerializeField] private float worldSize = 100f;
     [SerializeField] private float worldCenterX = 0f;
@@ -21,8 +23,15 @@ public class MistTrailController : MonoBehaviour
 
     public static void Unregister(Transform t) => _displacers.Remove(t);
 
+    /// <summary>Schaal de world size van de mist mee met de map grootte.</summary>
+    public void SetWorldSize(float size)
+    {
+        worldSize = Mathf.Max(10f, size);
+    }
+
     private void Awake()
     {
+        Instance = this;
         _trailTex = new Texture2D(resolution, resolution, TextureFormat.RFloat, false);
         _trailTex.wrapMode = TextureWrapMode.Clamp;
         _trailTex.filterMode = FilterMode.Bilinear;

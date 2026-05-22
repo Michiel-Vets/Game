@@ -13,12 +13,16 @@ public class WaveManager : MonoBehaviour
     public static WaveManager Instance { get; private set; }
 
     [Header("Wave Timing")]
-    [SerializeField] private float waveDuration = 120f;
-    [SerializeField] private float breakDuration = 120f;
+    [SerializeField] private float baseWaveDuration = 60f;
+    [SerializeField] private float waveDurationPerEnemy = 4f;
+    [SerializeField] private float maxWaveDuration = 240f;
+    [SerializeField] private float initialBreakDuration = 20f;   // Rust voor wave 1
+    [SerializeField] private float firstBreakDuration = 40f;     // Break na wave 1
+    [SerializeField] private float breakDuration = 90f;          // Overige breaks
 
     [Header("Enemy Count Scaling (Normal)")]
-    [SerializeField] private int baseMaxEnemies = 5;
-    [SerializeField] private int enemyCountIncreasePerWave = 2;
+    [SerializeField] private int baseMaxEnemies = 6;
+    [SerializeField] private float enemyGrowthFactor = 1.18f;    // Exponentieel per wave
     [SerializeField] private int maxEnemyLimit = 50;
 
     [Header("Spawn Interval Scaling")]
@@ -70,6 +74,8 @@ public class WaveManager : MonoBehaviour
     // Wave-clear tracking
     private int _waveKillCount;
     private int _waveTotalSpawned;
+    private int _totalWaveEnemies;       // totaal te spawnen deze wave (voor early-end check)
+    private float _currentWaveDuration;  // opgeslagen bij wave start voor progress bar
     private float _pendingPenalty;       // multiplier > 1 als vorige wave niet gecleared was
 
     private EnemySpawner spawner;
@@ -105,6 +111,10 @@ public class WaveManager : MonoBehaviour
 
         if (_waveTotalSpawned > 0 && _waveKillCount >= _waveTotalSpawned)
             clearUI?.ShowWaveCleared();
+
+        // Wave vroegtijdig beëindigen als alle enemies dood zijn
+        if (_totalWaveEnemies > 0 && _waveKillCount >= _totalWaveEnemies)
+            TimeRemaining = Mathf.Min(TimeRemaining, 2f);
     }
 
     private void Start()
@@ -112,7 +122,7 @@ public class WaveManager : MonoBehaviour
         spawner = FindObjectOfType<EnemySpawner>();
         waveUI = FindObjectOfType<WaveUIController>();
         IsBreak = true;
-        TimeRemaining = 0.1f;
+        TimeRemaining = initialBreakDuration;
         wavesSinceLastSpecial = 0;
 
         if (audioSource == null)
@@ -131,10 +141,20 @@ public class WaveManager : MonoBehaviour
         TimeRemaining -= Time.deltaTime;
 
         // Update progress UI
-        if (progressUI != null && !IsBreak)
+        if (!IsBreak)
         {
-            float progress = 1f - (TimeRemaining / waveDuration);
-            progressUI.SetProgress(progress);
+            if (progressUI != null)
+            {
+                float progress = _currentWaveDuration > 0f
+                    ? 1f - (TimeRemaining / _currentWaveDuration)
+                    : 1f;
+                progressUI.SetProgress(progress);
+            }
+            progressUI?.HideBreakCountdown();
+        }
+        else
+        {
+            progressUI?.ShowBreakCountdown(TimeRemaining);
         }
 
         if (TimeRemaining <= 0f)
@@ -161,7 +181,6 @@ public class WaveManager : MonoBehaviour
     {
         CurrentWave++;
         IsBreak = false;
-        TimeRemaining = waveDuration;
 
         // Reset kill-teller voor deze wave
         _waveKillCount    = 0;
@@ -176,6 +195,10 @@ public class WaveManager : MonoBehaviour
         AggressionLevel = Mathf.Clamp01((CurrentWave - 1) * aggressionPerWave * diffScale);
 
         int maxEnemies = GetWaveMaxEnemies();
+        _totalWaveEnemies = CurrentWaveType == WaveType.Siege ? int.MaxValue : maxEnemies;
+        _currentWaveDuration = GetWaveDuration(maxEnemies);
+        TimeRemaining = _currentWaveDuration;
+
         float spawnInterval = GetWaveSpawnInterval();
         float enemyHealthMultiplier = GetEnemyHealthMultiplier();
         float enemySpeedMultiplier = GetEnemySpeedMultiplier();
@@ -187,6 +210,9 @@ public class WaveManager : MonoBehaviour
         // Toon tooltip uitleg
         if (tooltipUI != null && CurrentWaveType != WaveType.Normal)
             tooltipUI.ShowTooltip(CurrentWaveType);
+
+        // Fog dichter tijdens wave
+        VolumetricMistController.Instance?.SetBreakMode(false);
 
         // Start de clear bar
         clearUI?.OnWaveStarted(CurrentWaveType == WaveType.Siege);
@@ -275,9 +301,13 @@ public class WaveManager : MonoBehaviour
     private void BeginBreak()
     {
         IsBreak = true;
-        TimeRemaining = breakDuration * DifficultySettings.BreakDurationMultiplier;
+        float baseDur = CurrentWave == 1 ? firstBreakDuration : breakDuration;
+        TimeRemaining = baseDur * DifficultySettings.BreakDurationMultiplier;
         scoutTimer = scoutSpawnInterval * 0.5f;
         spawner?.OnWaveBreak();
+
+        // Fog dunner tijdens break
+        VolumetricMistController.Instance?.SetBreakMode(true);
 
         if (progressUI != null)
             progressUI.Hide();
@@ -308,7 +338,8 @@ public class WaveManager : MonoBehaviour
             return 999;
 
         float mult = DifficultySettings.WaveEnemyCountMultiplier;
-        int count = baseMaxEnemies + (CurrentWave - 1) * enemyCountIncreasePerWave;
+        // Exponentiële groei: elke wave × enemyGrowthFactor
+        int count = Mathf.RoundToInt(baseMaxEnemies * Mathf.Pow(enemyGrowthFactor, CurrentWave - 1));
 
         if (CurrentWaveType == WaveType.Horde)
             count = Mathf.RoundToInt(count * 1.8f);
@@ -318,6 +349,14 @@ public class WaveManager : MonoBehaviour
         // Straf voor niet-geclearde vorige wave: meer enemies
         count = Mathf.RoundToInt(count * mult * ClearPenaltyMult);
         return Mathf.Min(count, maxEnemyLimit);
+    }
+
+    private float GetWaveDuration(int enemyCount)
+    {
+        if (CurrentWaveType == WaveType.Siege)
+            return baseWaveDuration;
+        float duration = baseWaveDuration + waveDurationPerEnemy * enemyCount;
+        return Mathf.Min(duration, maxWaveDuration);
     }
 
     public float GetWaveSpawnInterval()
