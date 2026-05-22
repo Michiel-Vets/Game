@@ -263,7 +263,12 @@ public class WaveManager : MonoBehaviour
 
     public void SkipToNextWave()
     {
-        if (!IsBreak) return;
+        if (!IsBreak)
+        {
+            // Tijdens een actieve wave: stop de wave en start meteen de volgende
+            BeginBreak();
+        }
+        // TimeRemaining op 0 zet zodat BeginWave() volgende frame wordt aangeroepen
         TimeRemaining = 0f;
     }
 
