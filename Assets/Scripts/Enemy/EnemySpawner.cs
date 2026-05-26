@@ -25,6 +25,12 @@ public class EnemySpawner : MonoBehaviour
     [SerializeField] private float raycastHeight = 20f;
     [SerializeField] private float spawnYOffset = 1f;
 
+    [Header("Circular Map Spawning")]
+    [Tooltip("Hoeveel meter buiten de map-rand vijanden spawnen (boven de afgrond).")]
+    [SerializeField] private float spawnBeyondEdge = 30f;
+    [Tooltip("Maximale willekeurige spreiding in graden per vijand (voor groepsspreiding).")]
+    [SerializeField] private float spawnAngleSpread = 20f;
+
     [Header("Elite Enemies (Normal Waves)")]
     [SerializeField] private float eliteChanceBase = 0.05f;
     [SerializeField] private float eliteChancePerWave = 0.02f;
@@ -120,9 +126,22 @@ public class EnemySpawner : MonoBehaviour
     {
         if (!isBreak) return;
         if (activeEnemies.Count >= 3) return;
-        if (edgePoints.Count == 0) return;
 
-        Vector3 spawnPos = edgePoints[Random.Range(0, edgePoints.Count)];
+        Vector3 spawnPos;
+        if (MapController.Instance != null)
+        {
+            // Circulaire map: willekeurige richting, buiten de rand
+            float angle = Random.Range(0f, 360f);
+            Vector3 dir = Quaternion.Euler(0f, angle, 0f) * Vector3.forward;
+            float radius = MapController.Instance.CurrentRadius + spawnBeyondEdge;
+            spawnPos = transform.position + dir * radius;
+            spawnPos.y = MapController.Instance.SurfaceY + spawnYOffset;
+        }
+        else
+        {
+            if (edgePoints.Count == 0) return;
+            spawnPos = edgePoints[Random.Range(0, edgePoints.Count)];
+        }
         GameObject enemy = Instantiate(scoutPrefab != null ? scoutPrefab : enemyPrefab, spawnPos, Quaternion.identity);
 
         EnemyController controller = enemy.GetComponent<EnemyController>();
@@ -194,9 +213,15 @@ public class EnemySpawner : MonoBehaviour
 
     private void SpawnSingleEnemy(Vector3 direction)
     {
-        if (edgePoints.Count == 0) return;
-
-        Vector3 spawnPos = GetSpawnPositionInDirection(direction);
+        // Bij circulaire map: spawn buiten de rand; anders: gebruik edge-punten
+        Vector3 spawnPos;
+        if (MapController.Instance != null)
+            spawnPos = GetSpawnPositionCircular(direction);
+        else
+        {
+            if (edgePoints.Count == 0) return;
+            spawnPos = GetSpawnPositionInDirection(direction);
+        }
         GameObject enemy = Instantiate(enemyPrefab, spawnPos, Quaternion.identity);
 
         EnemyController controller = enemy.GetComponent<EnemyController>();
@@ -223,6 +248,9 @@ public class EnemySpawner : MonoBehaviour
 
     private void UpdateMapRadius(int enemyCount)
     {
+        // Als MapController actief is, regelt die de schaling via wave-nummer.
+        if (MapController.Instance != null) return;
+
         if (enemyCount <= 0) return;
 
         float t = Mathf.Clamp01((float)enemyCount / 50f) * mapGrowthScale;
@@ -275,6 +303,32 @@ public class EnemySpawner : MonoBehaviour
     }
 
     // ── Spawn position ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Geeft een spawn-positie 30 m buiten de circulaire map-rand,
+    /// globaal in de opgegeven richting (met een kleine willekeurige spreiding).
+    /// </summary>
+    private Vector3 GetSpawnPositionCircular(Vector3 direction)
+    {
+        float radius = MapController.Instance.CurrentRadius + spawnBeyondEdge;
+
+        Vector3 dir;
+        if (direction == Vector3.zero)
+        {
+            float rndAngle = Random.Range(0f, 360f);
+            dir = Quaternion.Euler(0f, rndAngle, 0f) * Vector3.forward;
+        }
+        else
+        {
+            dir = new Vector3(direction.x, 0f, direction.z).normalized;
+            float spread = Random.Range(-spawnAngleSpread, spawnAngleSpread);
+            dir = Quaternion.Euler(0f, spread, 0f) * dir;
+        }
+
+        Vector3 pos = transform.position + dir * radius;
+        pos.y = MapController.Instance.SurfaceY + spawnYOffset;
+        return pos;
+    }
 
     private Vector3 GetSpawnPositionInDirection(Vector3 direction)
     {

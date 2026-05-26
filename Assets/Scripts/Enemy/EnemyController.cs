@@ -1133,6 +1133,20 @@ public class EnemyController : MonoBehaviour
 
     private Vector3 GetBoundaryPush()
     {
+        // Bij een circulaire map: vijanden die buiten de rand spawnen mogen vrij
+        // naar de speler toe vliegen. Boundary-check alleen voor vijanden die
+        // al op het platform staan (binnen de map-radius).
+        if (MapController.Instance != null)
+        {
+            Vector3 mapCenter = MapController.Instance.transform.position;
+            float flatDist = new Vector2(
+                transform.position.x - mapCenter.x,
+                transform.position.z - mapCenter.z).magnitude;
+
+            if (flatDist > MapController.Instance.CurrentRadius + 1f)
+                return Vector3.zero;
+        }
+
         Vector3 push = Vector3.zero;
         Vector3[] dirs =
         {
@@ -1288,9 +1302,16 @@ public class EnemyController : MonoBehaviour
     {
         Vector3 origin = transform.position + Vector3.up * 10f;
 
+        // Fallback: gebruik MapController.SurfaceY als er geen grond geraakt wordt
+        // (bijv. boven de afgrond buiten de circulaire map).
+        float groundFallback = MapController.Instance != null
+            ? MapController.Instance.SurfaceY
+            : 0f;
+
         float groundY = Physics.Raycast(origin, Vector3.down, out RaycastHit groundHit,
             heightRaycastDistance, groundLayers, QueryTriggerInteraction.Ignore)
-            ? groundHit.point.y : 0f;
+            ? groundHit.point.y
+            : groundFallback;
 
         float obstacleY = Physics.Raycast(origin, Vector3.down, out RaycastHit obstacleHit,
             heightRaycastDistance, obstacleLayers, QueryTriggerInteraction.Ignore)

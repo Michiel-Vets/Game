@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\MichielVets\\\\Documents\\\\GitHub\\\\Game\" -Recurse -Depth 3)",
+      "Bash(Select-Object FullName)"
+    ]
+  }
+}

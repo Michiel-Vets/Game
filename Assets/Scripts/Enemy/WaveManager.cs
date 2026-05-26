@@ -152,9 +152,13 @@ public class WaveManager : MonoBehaviour
             }
             progressUI?.HideBreakCountdown();
         }
-        else
+        else if (CurrentWave > 0)
         {
             progressUI?.ShowBreakCountdown(TimeRemaining);
+        }
+        else
+        {
+            progressUI?.HideBreakCountdown();
         }
 
         if (TimeRemaining <= 0f)
@@ -216,6 +220,9 @@ public class WaveManager : MonoBehaviour
 
         // Start de clear bar
         clearUI?.OnWaveStarted(CurrentWaveType == WaveType.Siege);
+
+        // Map laten groeien passend bij de nieuwe wave
+        MapController.Instance?.UpdateForWave(CurrentWave);
 
         spawner?.OnWaveStarted(CurrentWave, AggressionLevel, maxEnemies, spawnInterval,
                                 CurrentWaveType, enemyHealthMultiplier, enemySpeedMultiplier, spawnCap,

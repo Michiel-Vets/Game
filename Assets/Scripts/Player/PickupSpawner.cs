@@ -85,9 +85,14 @@ public class PickupSpawner : MonoBehaviour
     {
         if (prefab == null) return;
 
+        // Als MapController actief is, spawn altijd binnen de huidige map-rand
+        float effectiveRadius = MapController.Instance != null
+            ? MapController.Instance.CurrentRadius * 0.85f
+            : spawnRadius;
+
         for (int attempt = 0; attempt < 10; attempt++)
         {
-            Vector2 random2D = Random.insideUnitCircle * spawnRadius;
+            Vector2 random2D = Random.insideUnitCircle * effectiveRadius;
             Vector3 candidate = transform.position + new Vector3(random2D.x, 0f, random2D.y);
 
             if (Vector3.Distance(candidate, player.position) < minDistanceFromPlayer)

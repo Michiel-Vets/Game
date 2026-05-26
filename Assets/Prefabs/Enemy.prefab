@@ -97,16 +97,14 @@ MonoBehaviour:
   boostStartDistance: 15
   boostMaxDistance: 50
   maxBoostMultiplier: 2
-  flankChance: 0.45
   flankDuration: 12
   flankOrbitRadius: 5
+  flankOrbitRadiusEarlyWave: 10
   flankOrbitSpeed: 1.2
   flankSideFlipInterval: 4
   visibilityDotThreshold: 0.5
   interceptDistance: 20
   minInterceptDistance: 10
-  interceptChance: 0.12
-  interceptLookAhead: 0.6
   interceptMinDuration: 1.5
   interceptMaxDuration: 3
   lungeTriggerDistance: 5
@@ -116,6 +114,7 @@ MonoBehaviour:
   lungeDuration: 0.45
   lungeExhaustTime: 4
   lungeCooldown: 40
+  coordAttackRadius: 20
   enemyLayers:
     serializedVersion: 2
     m_Bits: 512
@@ -155,14 +154,11 @@ MonoBehaviour:
   fleeSpeed: 8
   fleeDuration: 2.5
   weakenedSpeed: 1.5
-  weakenedRetreatDistance: 30
-  flashlightKillTime: 0.5
+  flashlightKillTime: 0.2
   healTime: 5
   partialHealTimeMultiplier: 2.5
   beamEvasionStrength: 6
-  beamEvasionRadius: 3
   beamEvasionChance: 0.85
-  aggressionSpreadDuration: 300
   speedMultiplierMin: 0.4
   speedMultiplierMax: 2.8
   damageMultiplierMin: 2.5
@@ -173,19 +169,13 @@ MonoBehaviour:
   lungeSpeedMultiplierMax: 2.2
   scaleAtMinAggression: 2.8
   scaleAtMaxAggression: 0.35
-  hpMultiplierMin: 4.5
-  hpMultiplierMax: 0.2
   crowdCheckInterval: 0.7
   crowdSpreadRadius: 8
   maxNearbyAttackersBeforeSpread: 5
   crowdSpreadChance: 0.65
   crowdSpreadMinDuration: 4
   crowdSpreadMaxDuration: 8
-  crowdSurroundRadius: 7
   crowdAngleJitter: 35
-  anticipationRampDuration: 120
-  interceptChanceMin: 0.05
-  interceptChanceMax: 0.45
   interceptLookAheadMin: 0.3
   interceptLookAheadMax: 1.2
   maxLungeCooldownReduction: 0.6
@@ -202,6 +192,9 @@ MonoBehaviour:
   enemyVisibilityDistance: 30
   materializationRange: 10
   materializationDuration: 2
+  maxRetreatDuration: 7
+  minRetreatDuration: 1.5
+  retreatSpeed: 9
 --- !u!136 &-2867810269426647493
 CapsuleCollider:
   m_ObjectHideFlags: 0

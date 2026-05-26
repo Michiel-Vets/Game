@@ -13,6 +13,12 @@ public class WaveUIController : MonoBehaviour
 
     private Coroutine displayCoroutine;
 
+    private void Awake()
+    {
+        if (waveText != null)
+            waveText.alpha = 0f;
+    }
+
     private static readonly string[] Ordinals =
     {
         "1st", "2nd", "3rd", "4th", "5th",

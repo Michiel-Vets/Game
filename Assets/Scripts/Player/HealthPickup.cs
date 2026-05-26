@@ -9,6 +9,19 @@ public class HealthPickup : MonoBehaviour
 
     private Vector3 startPosition;
 
+    private void Awake()
+    {
+        Collider col = GetComponent<Collider>();
+        if (col != null) col.isTrigger = true;
+
+        Rigidbody rb = GetComponent<Rigidbody>();
+        if (rb != null)
+        {
+            rb.isKinematic = true;
+            rb.useGravity  = false;
+        }
+    }
+
     private void Start()
     {
         startPosition = transform.position;
