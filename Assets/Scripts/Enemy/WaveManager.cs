@@ -99,7 +99,10 @@ public class WaveManager : MonoBehaviour
     {
         if (IsBreak) return;
         _waveTotalSpawned++;
-        clearUI?.UpdateProgress(_waveKillCount, _waveTotalSpawned);
+        // Toon altijd het totale wave-aantal (ook niet-gespawnde enemies), behalve bij siege
+        int displayTotal = (_totalWaveEnemies > 0 && _totalWaveEnemies < int.MaxValue)
+            ? _totalWaveEnemies : _waveTotalSpawned;
+        clearUI?.UpdateProgress(_waveKillCount, displayTotal);
     }
 
     /// <summary>Aanroepen zodra een enemy sterft (zaklamp of aanval).</summary>
@@ -107,9 +110,13 @@ public class WaveManager : MonoBehaviour
     {
         if (IsBreak) return;
         _waveKillCount++;
-        clearUI?.UpdateProgress(_waveKillCount, _waveTotalSpawned);
+        int displayTotal = (_totalWaveEnemies > 0 && _totalWaveEnemies < int.MaxValue)
+            ? _totalWaveEnemies : _waveTotalSpawned;
+        clearUI?.UpdateProgress(_waveKillCount, displayTotal);
 
-        if (_waveTotalSpawned > 0 && _waveKillCount >= _waveTotalSpawned)
+        // Toon "WAVE CLEARED" pas als écht alle geplande wave-enemies dood zijn
+        if (_totalWaveEnemies > 0 && _totalWaveEnemies < int.MaxValue
+            && _waveKillCount >= _totalWaveEnemies)
             clearUI?.ShowWaveCleared();
 
         // Wave vroegtijdig beëindigen als alle enemies dood zijn
@@ -221,8 +228,12 @@ public class WaveManager : MonoBehaviour
         // Start de clear bar
         clearUI?.OnWaveStarted(CurrentWaveType == WaveType.Siege);
 
-        // Map laten groeien passend bij de nieuwe wave
-        MapController.Instance?.UpdateForWave(CurrentWave);
+        // Map laten groeien of krimpen afhankelijk van hoe de vorige wave verliep.
+        // _pendingPenalty loopt van 0 (gecleared) tot maxClearPenalty (volledig gemist).
+        float missedFraction = maxClearPenalty > 0f
+            ? _pendingPenalty / maxClearPenalty
+            : 0f;
+        MapController.Instance?.UpdateForWave(CurrentWave, missedFraction);
 
         spawner?.OnWaveStarted(CurrentWave, AggressionLevel, maxEnemies, spawnInterval,
                                 CurrentWaveType, enemyHealthMultiplier, enemySpeedMultiplier, spawnCap,

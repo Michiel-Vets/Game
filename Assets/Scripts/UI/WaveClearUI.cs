@@ -29,6 +29,7 @@ public class WaveClearUI : MonoBehaviour
     private CanvasGroup _group;
     private Coroutine   _messageCoroutine;
     private bool        _isSiegeWave;
+    private bool        _waveActive;
 
     private void Awake()
     {
@@ -41,6 +42,7 @@ public class WaveClearUI : MonoBehaviour
     public void OnWaveStarted(bool isSiege)
     {
         _isSiegeWave = isSiege;
+        _waveActive  = true;
         SetVisible(true);
 
         if (statusText    != null) { statusText.text    = ""; statusText.alpha = 1f; }
@@ -54,6 +56,7 @@ public class WaveClearUI : MonoBehaviour
 
     public void OnWaveEnded()
     {
+        _waveActive = false;
         if (_messageCoroutine == null)
             SetVisible(false);
     }
@@ -137,6 +140,8 @@ public class WaveClearUI : MonoBehaviour
 
         if (statusText != null) statusText.alpha = 0f;
         _messageCoroutine = null;
-        SetVisible(false);
+        // Verberg de balk alleen als de wave al voorbij is
+        if (!_waveActive)
+            SetVisible(false);
     }
 }

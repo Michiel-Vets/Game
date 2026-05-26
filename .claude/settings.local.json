@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\MichielVets\\\\Documents\\\\GitHub\\\\Game\" -Recurse -Depth 3)",
-      "Bash(Select-Object FullName)"
+      "Bash(Select-Object FullName)",
+      "Bash(findstr /n \"mapWallDensity\\\\|get_map_wall\\\\|_MapWallDensity\\\\|_DisplacerPositions\\\\|_DisplacerCount\" \"C:\\\\Users\\\\MichielVets\\\\Documents\\\\GitHub\\\\Game\\\\Assets\\\\Shader\\\\VolumetricMist.shader\")"
     ]
   }
 }

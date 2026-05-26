@@ -6219,11 +6219,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 46090c4c1bfc10842b4a82e5ca67a5cd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HealthController
-  maxHealth: 100
-  currentHealth: 0
-  healthBar: {fileID: 0}
-  fullWidth: 200
-  barHeight: 20
 --- !u!1 &1378751801
 GameObject:
   m_ObjectHideFlags: 0
@@ -6849,11 +6844,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 46090c4c1bfc10842b4a82e5ca67a5cd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HealthController
-  maxHealth: 100
-  currentHealth: 0
-  healthBar: {fileID: 0}
-  fullWidth: 200
-  barHeight: 20
 --- !u!114 &1444180903
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -7497,11 +7487,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 46090c4c1bfc10842b4a82e5ca67a5cd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HealthController
-  maxHealth: 100
-  currentHealth: 0
-  healthBar: {fileID: 0}
-  fullWidth: 200
-  barHeight: 20
 --- !u!114 &1748236546
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -8387,7 +8372,7 @@ MonoBehaviour:
   wallSegments: 24
   wallHeight: 5
   wallThickness: 0.4
-  wallEdgeOffset: -20
+  wallEdgeOffset: 0
 --- !u!4 &1834712172
 Transform:
   m_ObjectHideFlags: 0
@@ -9720,7 +9705,6 @@ GameObject:
   - component: {fileID: 8274528773792328047}
   - component: {fileID: 8960576402157799646}
   - component: {fileID: 8960576402157799647}
-  - component: {fileID: 8960576402157799648}
   m_Layer: 0
   m_Name: Player
   m_TagString: Player
@@ -10220,19 +10204,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c9b7cefe922feb046a1ea3718d7838e7, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MistDisplacer
---- !u!114 &8960576402157799648
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2210930813662676648}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 562db6e5f36eeb64fbbff033407a6802, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::MapBoundary
-  edgeInset: 0.3
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

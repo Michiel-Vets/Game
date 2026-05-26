@@ -29,6 +29,11 @@ Shader "Custom/VolumetricFog"
         _GroundCenterX("Ground center X", Float) = 0
         _GroundCenterZ("Ground center Z", Float) = 0
         _GroundRadius("Ground radius", Float) = 145
+
+        [Header(Map Edge Wall)]
+        _MapRadius("Map radius (gezet door MapController)", Float) = 50
+        _MapWallDensity("Map wall density", Range(0, 20)) = 6
+        _MapWallGhostRadius("Ghost opening radius", Float) = 8
     }
 
     SubShader
@@ -69,6 +74,9 @@ Shader "Custom/VolumetricFog"
                 float  _GroundCenterX;
                 float  _GroundCenterZ;
                 float  _GroundRadius;
+                float  _MapRadius;
+                float  _MapWallDensity;
+                float  _MapWallGhostRadius;
             CBUFFER_END
 
             TEXTURE3D(_FogNoise);
@@ -85,6 +93,10 @@ Shader "Custom/VolumetricFog"
             float  _FlashlightCosHalfAngle;
             float  _FlashlightRange;
             float  _FlashlightEnabled;
+
+            // Geest-posities — gezet door VolumetricMistController elke frame
+            float4 _DisplacerPositions[16];
+            float  _DisplacerCount;
 
             // ── Helpers ──────────────────────────────────────────────────────
 
@@ -176,6 +188,61 @@ float get_wall_density(float3 worldPos, float distFromPlayer)
     return 0;
 }
 
+            // ── Mist-muur op de map-rand (zelfde principe als lokale muur) ──────
+            // distFromCenter = afstand van rayPos tot het map-centrum in XZ,
+            // al berekend in de fragment-loop voor hergebruik.
+
+            float get_map_wall_density(float3 worldPos, float distFromCenter)
+            {
+                float height = worldPos.y - _FloorY;
+                if (height < 0 || height > _FogHeight) return 0;
+
+                float heightT          = saturate(height / _FogHeight);
+                // Onderkant (0.6) tot bovenkant (1.0) — zelfde als lokale muur
+                float wallHeightFactor = lerp(0.6, 1.0, heightT);
+
+                // Muur begint op 90% van de mapradius → dunne ring vlak bij de rand
+                float wallStart = _MapRadius * 0.90;
+
+                float wallDensity;
+                if (distFromCenter >= _MapRadius)
+                {
+                    // Voorbij de kaartrand: extreem dicht — niemand kan erdoorheen kijken
+                    wallDensity = _MapWallDensity * 8.0 * wallHeightFactor;
+                }
+                else if (distFromCenter >= wallStart)
+                {
+                    float t       = saturate((distFromCenter - wallStart) / (_MapRadius - wallStart));
+                    wallDensity   = t * t * t * _MapWallDensity * wallHeightFactor;
+                }
+                else
+                {
+                    return 0;
+                }
+
+                // Geest-doorgangen: geesten die door de wand bewegen openen een gat
+                float displacement = 1.0;
+                int   ghostCount   = min((int)_DisplacerCount, 16);
+                for (int gi = 0; gi < ghostCount; gi++)
+                {
+                    float3 gPos     = _DisplacerPositions[gi].xyz;
+                    float2 gXZ      = float2(gPos.x - _GroundCenterX, gPos.z - _GroundCenterZ);
+                    float  gRingDist = abs(length(gXZ) - _MapRadius);
+                    // Alleen geesten die zelf dicht bij de wand-ring zitten
+                    if (gRingDist > _MapWallGhostRadius * 2.0) continue;
+
+                    float2 toGhost   = float2(worldPos.x - gPos.x, worldPos.z - gPos.z);
+                    float  horizDist = length(toGhost);
+                    if (horizDist < _MapWallGhostRadius)
+                    {
+                        float f = horizDist / _MapWallGhostRadius;
+                        displacement = min(displacement, f * f);
+                    }
+                }
+
+                return wallDensity * displacement;
+            }
+
             // ── Fragment ──────────────────────────────────────────────────────
 
             half4 frag(Varyings IN) : SV_Target
@@ -203,9 +270,13 @@ float get_wall_density(float3 worldPos, float distFromPlayer)
                     float2 toPlayer       = float2(rayPos.x - _WorldSpaceCameraPos.x, rayPos.z - _WorldSpaceCameraPos.z);
                     float  distFromPlayer = length(toPlayer);
 
-                    float fogDensity  = get_fog_density(rayPos, distFromPlayer);
-                    float wallDensity = get_wall_density(rayPos, distFromPlayer);
-                    float totalDensity = fogDensity + wallDensity;
+                    float2 toCenter       = float2(rayPos.x - _GroundCenterX, rayPos.z - _GroundCenterZ);
+                    float  distFromCenter = length(toCenter);
+
+                    float fogDensity     = get_fog_density(rayPos, distFromPlayer);
+                    float wallDensity    = get_wall_density(rayPos, distFromPlayer);
+                    float mapWallDensity = get_map_wall_density(rayPos, distFromCenter);
+                    float totalDensity   = fogDensity + wallDensity + mapWallDensity;
 
                     if (totalDensity > 0)
                     {
@@ -236,8 +307,8 @@ float get_wall_density(float3 worldPos, float distFromPlayer)
                             fogAccum += litFog * fogDensity * _StepSize * transmittance;
                         }
 
-                        // Muur — puur grijs, geen belichting
-                        wallAccum += _WallColor.rgb * wallDensity * _StepSize * transmittance;
+                        // Muur (speler-zichtmuur + rand-muur) — puur grijs, geen belichting
+                        wallAccum += _WallColor.rgb * (wallDensity + mapWallDensity) * _StepSize * transmittance;
 
                         // Zaklamp scattering
                         float flashContrib = flashlight_contribution(rayPos);

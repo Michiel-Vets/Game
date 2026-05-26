@@ -28,14 +28,26 @@ public class MapController : MonoBehaviour
     [SerializeField] private float minRadius = 50f;
     [Tooltip("Maximale radius die het platform kan bereiken.")]
     [SerializeField] private float maxRadius = 300f;
-    [Tooltip("Groei in radius per wave (50 + wave * groei).")]
+    [Tooltip("Groei in radius per wave (minRadius + wave * groei).")]
     [SerializeField] private float radiusGrowthPerWave = 12.5f;
-    [Tooltip("Snelheid waarmee het platform visueel groeit (eenheden/sec).")]
+    [Tooltip("Maximale krimp bij een volledig mislukte wave.")]
+    [SerializeField] private float maxShrinkPerWave = 20f;
+    [Tooltip("Snelheid waarmee het platform visueel groeit of krimpt (eenheden/sec).")]
     [SerializeField] private float growthSpeed = 10f;
 
     [Header("Fog")]
-    [Tooltip("Extra marge boven mapRadius voor de fog-grens.")]
-    [SerializeField] private float fogRadiusMargin = 40f;
+    [Tooltip("Extra marge boven mapRadius voor de fog-grens (0 = precies op de kaartrand).")]
+    [SerializeField] private float fogRadiusMargin = 0f;
+
+    [Header("Boundary Wall")]
+    [Tooltip("Aantal onzichtbare muursegmenten rond de kaartrand.")]
+    [SerializeField] private int wallSegments = 24;
+    [Tooltip("Hoogte van de onzichtbare muur (hoog genoeg dat de speler er niet overheen kan springen).")]
+    [SerializeField] private float wallHeight = 5f;
+    [Tooltip("Dikte van elk muursegment.")]
+    [SerializeField] private float wallThickness = 0.4f;
+    [Tooltip("Offset van de muur ten opzichte van de kaartrand (0 = precies op de rand).")]
+    [SerializeField] private float wallEdgeOffset = 0f;
 
     // ── Publieke properties ───────────────────────────────────────────────────
 
@@ -45,23 +57,30 @@ public class MapController : MonoBehaviour
     /// <summary>Y-positie van het bovenoppervlak van het cilinder-platform.</summary>
     public float SurfaceY { get; private set; }
 
+    /// <summary>XZ-middelpunt van het platform (gebruikt door MapBoundary).</summary>
+    public Vector3 PlatformCenter => platformTransform != null
+        ? platformTransform.position
+        : transform.position;
+
     // ── Privé ─────────────────────────────────────────────────────────────────
 
-    private float _targetRadius;
+    private float      _targetRadius;
+    private Transform[] _wallSegmentTransforms;
 
     // ── Unity lifecycle ───────────────────────────────────────────────────────
 
     private void Awake()
     {
-        Instance = this;
-        CurrentRadius  = minRadius;
-        _targetRadius  = minRadius;
+        Instance      = this;
+        CurrentRadius = minRadius;
+        _targetRadius = minRadius;
     }
 
     private void Start()
     {
         RefreshSurfaceY();
-        ApplyPlatformScale();
+        CreateBoundaryWall();
+        ApplyPlatformScale();   // roept UpdateBoundaryWall + RefreshSurfaceY aan
         PushFogGlobals();
     }
 
@@ -78,50 +97,118 @@ public class MapController : MonoBehaviour
     // ── Publieke methoden ─────────────────────────────────────────────────────
 
     /// <summary>
-    /// Aanroepen vanuit WaveManager.BeginWave() om de doelradius voor de komende wave in te stellen.
+    /// Aanroepen vanuit WaveManager.BeginWave().
+    /// missedFraction = 0  → wave gecleared, map groeit normaal.
+    /// missedFraction = 1  → wave volledig gemist, map krimpt maximaal.
     /// </summary>
-    public void UpdateForWave(int waveNumber)
+    public void UpdateForWave(int waveNumber, float missedFraction = 0f)
     {
-        _targetRadius = Mathf.Clamp(
-            minRadius + (waveNumber - 1) * radiusGrowthPerWave,
-            minRadius,
-            maxRadius);
+        if (missedFraction > 0.02f)
+        {
+            float shrink  = maxShrinkPerWave * missedFraction;
+            _targetRadius = Mathf.Max(minRadius, _targetRadius - shrink);
+        }
+        else
+        {
+            _targetRadius = Mathf.Clamp(
+                minRadius + (waveNumber - 1) * radiusGrowthPerWave,
+                minRadius,
+                maxRadius);
+        }
     }
 
     // ── Interne helpers ───────────────────────────────────────────────────────
 
     private void ApplyPlatformScale()
     {
-        if (platformTransform == null) return;
+        if (platformTransform != null)
+        {
+            float scaleValue = cylinderScaleFactor > 0f
+                ? CurrentRadius / cylinderScaleFactor
+                : CurrentRadius;
 
-        // localScale.x zodat world-radius == CurrentRadius
-        float scaleValue = cylinderScaleFactor > 0f
-            ? CurrentRadius / cylinderScaleFactor
-            : CurrentRadius;
-
-        Vector3 s = platformTransform.localScale;
-        platformTransform.localScale = new Vector3(scaleValue, s.y, scaleValue);
+            Vector3 s = platformTransform.localScale;
+            platformTransform.localScale = new Vector3(scaleValue, s.y, scaleValue);
+        }
 
         RefreshSurfaceY();
+        UpdateBoundaryWall();
     }
 
     private void RefreshSurfaceY()
     {
         if (platformTransform == null) { SurfaceY = 0f; return; }
-
         // Unity Cylinder: totale hoogte = localScale.y * 2 → bovenkant = positie.y + localScale.y
         SurfaceY = platformTransform.position.y + platformTransform.localScale.y;
     }
 
     private void PushFogGlobals()
     {
-        float fogRadius = CurrentRadius + fogRadiusMargin;
+        // _MapRadius = exacte kaartrand → mist-muur geplaatst hierop
+        Shader.SetGlobalFloat("_MapRadius", CurrentRadius);
+        // _GroundRadius = fog-dekkingsgebied
+        Shader.SetGlobalFloat("_GroundRadius", CurrentRadius + fogRadiusMargin);
+    }
 
-        // Fog shader _GroundRadius bepaalt tot hoe ver de mist zichtbaar is
-        Shader.SetGlobalFloat("_GroundRadius", fogRadius);
+    // ── Boundary wall ─────────────────────────────────────────────────────────
 
-        // MistTrail worldSize mee schalen
-        MistTrailController.Instance?.SetWorldSize(fogRadius * 2f);
+    /// <summary>
+    /// Maakt de onzichtbare muursegmenten aan. Eenmalig aangeroepen vanuit Start().
+    /// </summary>
+    private void CreateBoundaryWall()
+    {
+        GameObject wallRoot = new GameObject("BoundaryWall");
+        wallRoot.transform.SetParent(transform);
+
+        _wallSegmentTransforms = new Transform[wallSegments];
+
+        for (int i = 0; i < wallSegments; i++)
+        {
+            GameObject seg = new GameObject($"WallSeg_{i}");
+            seg.transform.SetParent(wallRoot.transform);
+            seg.AddComponent<BoxCollider>();   // geen Renderer → onzichtbaar
+            _wallSegmentTransforms[i] = seg.transform;
+        }
+    }
+
+    /// <summary>
+    /// Past de positie en grootte van alle muursegmenten aan op de huidige radius.
+    /// Aangeroepen elke keer dat ApplyPlatformScale() wordt aangeroepen.
+    /// </summary>
+    private void UpdateBoundaryWall()
+    {
+        if (_wallSegmentTransforms == null) return;
+
+        float wallRadius = CurrentRadius + wallEdgeOffset;
+
+        // Breedte per segment = stuk van de omtrek + kleine overlap om gaten te voorkomen
+        float segmentWidth = (2f * Mathf.PI * wallRadius / wallSegments) + 0.5f;
+
+        // Midden van de muur verticaal: van SurfaceY tot SurfaceY + wallHeight
+        float wallCenterY = SurfaceY + wallHeight * 0.5f;
+
+        // Centrum van het platform in XZ
+        float cx = platformTransform != null ? platformTransform.position.x : 0f;
+        float cz = platformTransform != null ? platformTransform.position.z : 0f;
+
+        for (int i = 0; i < wallSegments; i++)
+        {
+            float angle = i * (360f / wallSegments) * Mathf.Deg2Rad;
+
+            // Positie op de cirkel
+            _wallSegmentTransforms[i].position = new Vector3(
+                cx + Mathf.Sin(angle) * wallRadius,
+                wallCenterY,
+                cz + Mathf.Cos(angle) * wallRadius);
+
+            // Rotatie zodat het segment tangentiaal (langs de cirkel) staat
+            _wallSegmentTransforms[i].rotation =
+                Quaternion.Euler(0f, i * (360f / wallSegments), 0f);
+
+            // Grootte: breedte langs de cirkel, hoogte omhoog, dikte naar buiten
+            _wallSegmentTransforms[i].GetComponent<BoxCollider>().size =
+                new Vector3(segmentWidth, wallHeight, wallThickness);
+        }
     }
 
     // ── Gizmos ────────────────────────────────────────────────────────────────
@@ -134,13 +221,9 @@ public class MapController : MonoBehaviour
         Gizmos.color = Color.cyan;
         DrawCircle(transform.position, r);
 
-        // Vijanden spawn-ring (oranje, 30m buiten map)
+        // Vijanden spawn-ring (oranje)
         Gizmos.color = new Color(1f, 0.5f, 0f, 0.8f);
         DrawCircle(transform.position, r + 30f);
-
-        // Fog-grens (geel, gestippeld)
-        Gizmos.color = new Color(1f, 1f, 0f, 0.4f);
-        DrawCircle(transform.position, r + fogRadiusMargin);
     }
 
     private static void DrawCircle(Vector3 center, float radius, int segments = 64)
