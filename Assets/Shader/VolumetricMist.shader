@@ -28,10 +28,10 @@ Shader "Custom/VolumetricFog"
         [Header(Ground Bounds)]
         _GroundCenterX("Ground center X", Float) = 0
         _GroundCenterZ("Ground center Z", Float) = 0
-        _GroundRadius("Ground radius", Float) = 145
+        _GroundRadius("Ground radius", Float) = 100
 
         [Header(Map Edge Wall)]
-        _MapRadius("Map radius (gezet door MapController)", Float) = 50
+        _MapRadius("Map radius", Float) = 100
         _MapWallDensity("Map wall density", Range(0, 20)) = 6
         _MapWallGhostRadius("Ghost opening radius", Float) = 8
     }
@@ -158,7 +158,9 @@ Shader "Custom/VolumetricFog"
     return density;
 }
 
-float get_wall_density(float3 worldPos, float distFromPlayer)
+// effectiveVis = min(_VisibilityDistance, afstand tot kaartrand langs deze ray)
+// zodat de persoonlijke mist-muur stopt op de kaartrand als die dichterbij is.
+float get_wall_density(float3 worldPos, float distFromPlayer, float effectiveVis)
 {
     if (!within_ground_bounds(worldPos)) return 0;
 
@@ -166,81 +168,34 @@ float get_wall_density(float3 worldPos, float distFromPlayer)
     if (height < 0 || height > _FogHeight) return 0;
 
     float heightT = saturate(height / _FogHeight);
-
-    // Minimum 0.6 aan de grond zodat grondniveau pickups ook verborgen worden,
-    // 1.0 bovenaan zodat de muur duidelijk zichtbaar is langs de bovenkant
     float wallHeightFactor = lerp(0.6, 1.0, heightT);
 
-    float wallStart = _VisibilityDistance * 0.65;
+    float wallStart = effectiveVis * 0.65;
 
-    if (distFromPlayer >= _VisibilityDistance)
-    {
-        // Voorbij de grens: extreem dicht zodat transmittance vrijwel onmiddellijk 0 is
+    if (distFromPlayer >= effectiveVis)
         return _WallDensity * 8.0 * wallHeightFactor;
-    }
     else if (distFromPlayer >= wallStart)
     {
-        float t          = saturate((distFromPlayer - wallStart) / (_VisibilityDistance - wallStart));
-        float wallFactor = t * t * t;
-        return wallFactor * _WallDensity * wallHeightFactor;
+        float t = saturate((distFromPlayer - wallStart) / max(effectiveVis - wallStart, 0.001));
+        return t * t * t * _WallDensity * wallHeightFactor;
     }
 
     return 0;
 }
 
-            // ── Mist-muur op de map-rand (zelfde principe als lokale muur) ──────
-            // distFromCenter = afstand van rayPos tot het map-centrum in XZ,
-            // al berekend in de fragment-loop voor hergebruik.
+            // ── Mist buiten de kaartrand ─────────────────────────────────────────
+            // Voegt ondoordringbare mist toe voor rays die voorbij de rand komen.
+            // Het zichtbaar maken van de rand zelf gebeurt via effectiveVis in get_wall_density.
 
             float get_map_wall_density(float3 worldPos, float distFromCenter)
             {
+                if (distFromCenter <= _MapRadius) return 0;
+
                 float height = worldPos.y - _FloorY;
                 if (height < 0 || height > _FogHeight) return 0;
 
-                float heightT          = saturate(height / _FogHeight);
-                // Onderkant (0.6) tot bovenkant (1.0) — zelfde als lokale muur
-                float wallHeightFactor = lerp(0.6, 1.0, heightT);
-
-                // Muur begint op 90% van de mapradius → dunne ring vlak bij de rand
-                float wallStart = _MapRadius * 0.90;
-
-                float wallDensity;
-                if (distFromCenter >= _MapRadius)
-                {
-                    // Voorbij de kaartrand: extreem dicht — niemand kan erdoorheen kijken
-                    wallDensity = _MapWallDensity * 8.0 * wallHeightFactor;
-                }
-                else if (distFromCenter >= wallStart)
-                {
-                    float t       = saturate((distFromCenter - wallStart) / (_MapRadius - wallStart));
-                    wallDensity   = t * t * t * _MapWallDensity * wallHeightFactor;
-                }
-                else
-                {
-                    return 0;
-                }
-
-                // Geest-doorgangen: geesten die door de wand bewegen openen een gat
-                float displacement = 1.0;
-                int   ghostCount   = min((int)_DisplacerCount, 16);
-                for (int gi = 0; gi < ghostCount; gi++)
-                {
-                    float3 gPos     = _DisplacerPositions[gi].xyz;
-                    float2 gXZ      = float2(gPos.x - _GroundCenterX, gPos.z - _GroundCenterZ);
-                    float  gRingDist = abs(length(gXZ) - _MapRadius);
-                    // Alleen geesten die zelf dicht bij de wand-ring zitten
-                    if (gRingDist > _MapWallGhostRadius * 2.0) continue;
-
-                    float2 toGhost   = float2(worldPos.x - gPos.x, worldPos.z - gPos.z);
-                    float  horizDist = length(toGhost);
-                    if (horizDist < _MapWallGhostRadius)
-                    {
-                        float f = horizDist / _MapWallGhostRadius;
-                        displacement = min(displacement, f * f);
-                    }
-                }
-
-                return wallDensity * displacement;
+                float heightT = saturate(height / _FogHeight);
+                return _MapWallDensity * 8.0 * lerp(0.6, 1.0, heightT);
             }
 
             // ── Fragment ──────────────────────────────────────────────────────
@@ -259,6 +214,21 @@ float get_wall_density(float3 worldPos, float distFromPlayer)
                 float distTravelled = InterleavedGradientNoise(
                     pixCoords, (int)(_Time.y / max(HALF_EPS, unity_DeltaTime.x))) * _NoiseOffset;
 
+                // Bereken hoe ver de ray reist voordat hij de kaartrand raakt (XZ-vlak).
+                // effectiveVis = min(persoonlijke zichtbaarheid, afstand tot kaartrand).
+                // Zo stopt de mist-muur precies op de rand, zichtbaar vanuit elke positie.
+                float2 camXZ    = float2(_WorldSpaceCameraPos.x - _GroundCenterX,
+                                         _WorldSpaceCameraPos.z - _GroundCenterZ);
+                float2 dirXZ    = float2(rayDir.x, rayDir.z);
+                float  rA       = dot(dirXZ, dirXZ);
+                float  rB       = 2.0 * dot(camXZ, dirXZ);
+                float  rC       = dot(camXZ, camXZ) - _MapRadius * _MapRadius;
+                float  rDisc    = rB * rB - 4.0 * rA * rC;
+                float  tEdge    = (rDisc >= 0.0 && rA > 0.0001)
+                                    ? (-rB + sqrt(rDisc)) / (2.0 * rA)
+                                    : _VisibilityDistance;
+                float  effectiveVis = min(_VisibilityDistance, max(tEdge, 0.5));
+
                 float  transmittance = 1.0;
                 float3 fogAccum      = float3(0, 0, 0);
                 float3 wallAccum     = float3(0, 0, 0);
@@ -274,7 +244,7 @@ float get_wall_density(float3 worldPos, float distFromPlayer)
                     float  distFromCenter = length(toCenter);
 
                     float fogDensity     = get_fog_density(rayPos, distFromPlayer);
-                    float wallDensity    = get_wall_density(rayPos, distFromPlayer);
+                    float wallDensity    = get_wall_density(rayPos, distFromPlayer, effectiveVis);
                     float mapWallDensity = get_map_wall_density(rayPos, distFromCenter);
                     float totalDensity   = fogDensity + wallDensity + mapWallDensity;
 

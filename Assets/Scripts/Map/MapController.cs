@@ -25,9 +25,9 @@ public class MapController : MonoBehaviour
 
     [Header("Radius Scaling")]
     [Tooltip("Startradius van het platform (wave 1).")]
-    [SerializeField] private float minRadius = 50f;
+    [SerializeField] private float minRadius = 100f;
     [Tooltip("Maximale radius die het platform kan bereiken.")]
-    [SerializeField] private float maxRadius = 300f;
+    [SerializeField] private float maxRadius = 400f;
     [Tooltip("Groei in radius per wave (minRadius + wave * groei).")]
     [SerializeField] private float radiusGrowthPerWave = 12.5f;
     [Tooltip("Maximale krimp bij een volledig mislukte wave.")]
@@ -36,8 +36,8 @@ public class MapController : MonoBehaviour
     [SerializeField] private float growthSpeed = 10f;
 
     [Header("Fog")]
-    [Tooltip("Extra marge boven mapRadius voor de fog-grens (0 = precies op de kaartrand).")]
-    [SerializeField] private float fogRadiusMargin = 0f;
+    [Tooltip("Sleep hier het fog material (VolumetricMist) naartoe zodat de muur meegroeit.")]
+    [SerializeField] private Material fogMaterial;
 
     [Header("Boundary Wall")]
     [Tooltip("Aantal onzichtbare muursegmenten rond de kaartrand.")]
@@ -64,8 +64,9 @@ public class MapController : MonoBehaviour
 
     // ── Privé ─────────────────────────────────────────────────────────────────
 
-    private float      _targetRadius;
-    private Transform[] _wallSegmentTransforms;
+    private float          _targetRadius;
+    private Transform[]    _wallSegmentTransforms;
+    private BoxCollider[]  _wallSegmentColliders;
 
     // ── Unity lifecycle ───────────────────────────────────────────────────────
 
@@ -144,10 +145,20 @@ public class MapController : MonoBehaviour
 
     private void PushFogGlobals()
     {
-        // _MapRadius = exacte kaartrand → mist-muur geplaatst hierop
-        Shader.SetGlobalFloat("_MapRadius", CurrentRadius);
-        // _GroundRadius = fog-dekkingsgebied
-        Shader.SetGlobalFloat("_GroundRadius", CurrentRadius + fogRadiusMargin);
+        if (fogMaterial != null)
+        {
+            fogMaterial.SetFloat("_MapRadius",    CurrentRadius);
+            fogMaterial.SetFloat("_GroundRadius", CurrentRadius);
+            Vector3 center = PlatformCenter;
+            fogMaterial.SetFloat("_GroundCenterX", center.x);
+            fogMaterial.SetFloat("_GroundCenterZ", center.z);
+        }
+        else
+        {
+            // Fallback als het material niet is ingesteld
+            Shader.SetGlobalFloat("_MapRadius",    CurrentRadius);
+            Shader.SetGlobalFloat("_GroundRadius", CurrentRadius);
+        }
     }
 
     // ── Boundary wall ─────────────────────────────────────────────────────────
@@ -161,12 +172,13 @@ public class MapController : MonoBehaviour
         wallRoot.transform.SetParent(transform);
 
         _wallSegmentTransforms = new Transform[wallSegments];
+        _wallSegmentColliders  = new BoxCollider[wallSegments];
 
         for (int i = 0; i < wallSegments; i++)
         {
             GameObject seg = new GameObject($"WallSeg_{i}");
             seg.transform.SetParent(wallRoot.transform);
-            seg.AddComponent<BoxCollider>();   // geen Renderer → onzichtbaar
+            _wallSegmentColliders[i]  = seg.AddComponent<BoxCollider>();
             _wallSegmentTransforms[i] = seg.transform;
         }
     }
@@ -205,9 +217,7 @@ public class MapController : MonoBehaviour
             _wallSegmentTransforms[i].rotation =
                 Quaternion.Euler(0f, i * (360f / wallSegments), 0f);
 
-            // Grootte: breedte langs de cirkel, hoogte omhoog, dikte naar buiten
-            _wallSegmentTransforms[i].GetComponent<BoxCollider>().size =
-                new Vector3(segmentWidth, wallHeight, wallThickness);
+            _wallSegmentColliders[i].size = new Vector3(segmentWidth, wallHeight, wallThickness);
         }
     }
 

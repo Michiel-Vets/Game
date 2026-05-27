@@ -312,7 +312,8 @@ public class WaveManager : MonoBehaviour
             // Tijdens een actieve wave: stop de wave en start meteen de volgende
             BeginBreak();
         }
-        // TimeRemaining op 0 zet zodat BeginWave() volgende frame wordt aangeroepen
+        // Skip = geen straf: map groeit altijd bij een skip
+        _pendingPenalty = 0f;
         TimeRemaining = 0f;
     }
 

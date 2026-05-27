@@ -8363,16 +8363,16 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MapController
   platformTransform: {fileID: 1892995496}
   cylinderScaleFactor: 1
-  minRadius: 20
+  minRadius: 100
   maxRadius: 400
   radiusGrowthPerWave: 12.5
   maxShrinkPerWave: 20
   growthSpeed: 10
-  fogMaterial: {fileID: 2100000, guid: f8309d28fa17a724fa927a8417d3f606, type: 2}
+  fogRadiusMargin: 0
   wallSegments: 24
   wallHeight: 5
   wallThickness: 0.4
-  wallEdgeOffset: 0
+  wallEdgeOffset: -20
 --- !u!4 &1834712172
 Transform:
   m_ObjectHideFlags: 0

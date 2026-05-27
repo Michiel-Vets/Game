@@ -8363,7 +8363,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MapController
   platformTransform: {fileID: 1892995496}
   cylinderScaleFactor: 1
-  minRadius: 20
+  minRadius: 100
   maxRadius: 400
   radiusGrowthPerWave: 12.5
   maxShrinkPerWave: 20

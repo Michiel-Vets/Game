@@ -117,6 +117,8 @@ Material:
     - _GroundRadius: 149
     - _HeightPower: 2
     - _LightScattering: 0.2
+    - _MapWallDensity: 6
+    - _MapWallGhostRadius: 8
     - _MaxDistance: 40
     - _Metallic: 0
     - _NoiseOffset: 1
@@ -132,7 +134,7 @@ Material:
     - _SrcBlendAlpha: 1
     - _StepSize: 0.5
     - _Surface: 0
-    - _VisibilityDistance: 40
+    - _VisibilityDistance: 200
     - _WallDensity: 0.2
     - _WorkflowMode: 1
     - _XRMotionVectorsPass: 1
