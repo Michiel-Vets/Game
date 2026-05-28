@@ -1495,6 +1495,15 @@ MonoBehaviour:
     m_Bits: 1024
   fullEffectDistance: 10
   minEffectAtMaxDistance: 0.02
+  weakRange: 15
+  weakSpotAngle: 55
+  weakHitRadius: 2.2
+  weakBatteryMultiplier: 0.333
+  strongRange: 38
+  strongSpotAngle: 18
+  strongHitRadius: 0.7
+  strongBatteryMultiplier: 2
+  strongEffectMultiplier: 1.8
 --- !u!1 &236476790
 GameObject:
   m_ObjectHideFlags: 0
@@ -6219,11 +6228,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 46090c4c1bfc10842b4a82e5ca67a5cd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HealthController
-  maxHealth: 100
-  currentHealth: 0
-  healthBar: {fileID: 0}
-  fullWidth: 200
-  barHeight: 20
 --- !u!1 &1378751801
 GameObject:
   m_ObjectHideFlags: 0
@@ -6849,11 +6853,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 46090c4c1bfc10842b4a82e5ca67a5cd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HealthController
-  maxHealth: 100
-  currentHealth: 0
-  healthBar: {fileID: 0}
-  fullWidth: 200
-  barHeight: 20
 --- !u!114 &1444180903
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -7497,11 +7496,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 46090c4c1bfc10842b4a82e5ca67a5cd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HealthController
-  maxHealth: 100
-  currentHealth: 0
-  healthBar: {fileID: 0}
-  fullWidth: 200
-  barHeight: 20
 --- !u!114 &1748236546
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -8203,11 +8197,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PickupSpawner
   batteryPickupPrefab: {fileID: 4887252627349488371, guid: 21a959b5877d64240a4d53d98a46a004, type: 3}
   healthPickupPrefab: {fileID: 1667142545735112892, guid: 58c257325cc27b748848a6175e0ac48b, type: 3}
-  maxBatteryPickups: 12
-  maxHealthPickups: 12
+  maxBatteryPickups: 5
+  maxHealthPickups: 5
   batterySpawnInterval: 10
   healthSpawnInterval: 10
-  spawnRadius: 145
+  spawnRadius: 400
   minDistanceFromPlayer: 15
   groundLayer:
     serializedVersion: 2

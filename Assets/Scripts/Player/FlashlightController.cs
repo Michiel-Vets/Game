@@ -3,6 +3,8 @@ using System.Collections.Generic;
 
 public class FlashlightController : MonoBehaviour
 {
+    public enum FlashlightMode { Off, Weak, Medium, Strong }
+
     [Header("References")]
     [SerializeField] private BatteryController batteryController;
 
@@ -10,7 +12,7 @@ public class FlashlightController : MonoBehaviour
     [SerializeField] private Light flashlight;
     [SerializeField] private bool startsOn = true;
 
-    [Header("Beam Settings")]
+    [Header("Beam Settings (Medium / Base)")]
     [SerializeField] private float maxDistance = 25f;
     [SerializeField] private float hitRadius = 1.2f;
 
@@ -23,67 +25,115 @@ public class FlashlightController : MonoBehaviour
     [SerializeField] private float fullEffectDistance = 5f;
     [SerializeField, Range(0f, 1f)] private float minEffectAtMaxDistance = 0.1f;
 
-    public bool IsOn => isOn;
+    [Header("Weak Mode  (spot-only, brede bundel)")]
+    [SerializeField] private float weakRange = 15f;
+    [SerializeField] private float weakSpotAngle = 55f;
+    [SerializeField] private float weakHitRadius = 2.2f;
+    [SerializeField] private float weakBatteryMultiplier = 0.333f;
 
-    private bool isOn;
+    [Header("Strong Mode  (hogere damage, smalle bundel)")]
+    [SerializeField] private float strongRange = 38f;
+    [SerializeField] private float strongSpotAngle = 18f;
+    [SerializeField] private float strongHitRadius = 0.7f;
+    [SerializeField] private float strongBatteryMultiplier = 2.0f;
+    [SerializeField] private float strongEffectMultiplier = 1.8f;
+
+    public bool IsOn => _mode != FlashlightMode.Off;
+    public FlashlightMode CurrentMode => _mode;
+
+    private FlashlightMode _mode = FlashlightMode.Off;
+    private float _baseLightRange;
+    private float _baseSpotAngle;
     private HashSet<EnemyController> _litEnemies = new HashSet<EnemyController>();
 
-    private static readonly int PropPos = Shader.PropertyToID("_FlashlightWorldPos");
-    private static readonly int PropDir = Shader.PropertyToID("_FlashlightWorldDir");
+    private static readonly int PropPos      = Shader.PropertyToID("_FlashlightWorldPos");
+    private static readonly int PropDir      = Shader.PropertyToID("_FlashlightWorldDir");
     private static readonly int PropCosAngle = Shader.PropertyToID("_FlashlightCosHalfAngle");
-    private static readonly int PropRange = Shader.PropertyToID("_FlashlightRange");
-    private static readonly int PropEnabled = Shader.PropertyToID("_FlashlightEnabled");
+    private static readonly int PropRange    = Shader.PropertyToID("_FlashlightRange");
+    private static readonly int PropEnabled  = Shader.PropertyToID("_FlashlightEnabled");
 
     private void Awake()
     {
         if (flashlight == null)
             flashlight = GetComponent<Light>();
+        _baseLightRange = flashlight != null ? flashlight.range : maxDistance;
+        _baseSpotAngle  = flashlight != null ? flashlight.spotAngle : 30f;
     }
 
     private void Start()
     {
-        isOn = startsOn;
-        ApplyState();
+        _mode = startsOn ? FlashlightMode.Medium : FlashlightMode.Off;
+        ApplyMode();
     }
 
     private void Update()
     {
-        if (isOn)
+        if (_mode != FlashlightMode.Off)
         {
             if (batteryController != null)
             {
-                batteryController.DrainBattery(Time.deltaTime);
+                batteryController.DrainBattery(Time.deltaTime * GetDrainMultiplier());
 
                 if (!batteryController.HasBattery)
                 {
-                    isOn = false;
-                    ApplyState();
+                    SetMode(FlashlightMode.Off);
                     return;
                 }
             }
 
-            if (damageEnemies)
-                HandleBeam();
+            HandleBeam();
         }
 
         UpdateShaderGlobals();
     }
 
-    public void Toggle()
+    /// <summary>Cyclet: Uit → Zwak → Medium → Sterk → Uit</summary>
+    public void CycleMode()
     {
-        if (!isOn && batteryController != null && !batteryController.HasBattery)
-            return;
-
-        isOn = !isOn;
-        ApplyState();
+        bool hasBattery = batteryController == null || batteryController.HasBattery;
+        FlashlightMode next = (FlashlightMode)(((int)_mode + 1) % 4);
+        if (next != FlashlightMode.Off && !hasBattery)
+            next = FlashlightMode.Off;
+        SetMode(next);
     }
 
-    private void ApplyState()
-    {
-        if (flashlight != null)
-            flashlight.enabled = isOn;
+    // Backwards-compat alias (werd aangeroepen vanuit PlayerController)
+    public void Toggle() => CycleMode();
 
-        if (!isOn)
+    private void SetMode(FlashlightMode mode)
+    {
+        _mode = mode;
+        ApplyMode();
+    }
+
+    private void ApplyMode()
+    {
+        bool on = _mode != FlashlightMode.Off;
+
+        if (flashlight != null)
+        {
+            flashlight.enabled = on;
+            if (on)
+            {
+                switch (_mode)
+                {
+                    case FlashlightMode.Weak:
+                        flashlight.range     = weakRange;
+                        flashlight.spotAngle = weakSpotAngle;
+                        break;
+                    case FlashlightMode.Medium:
+                        flashlight.range     = _baseLightRange;
+                        flashlight.spotAngle = _baseSpotAngle;
+                        break;
+                    case FlashlightMode.Strong:
+                        flashlight.range     = strongRange;
+                        flashlight.spotAngle = strongSpotAngle;
+                        break;
+                }
+            }
+        }
+
+        if (!on)
         {
             foreach (var enemy in _litEnemies)
                 enemy.SetTargetVisibility(0f);
@@ -93,34 +143,49 @@ public class FlashlightController : MonoBehaviour
         UpdateShaderGlobals();
     }
 
+    private float GetDrainMultiplier()
+    {
+        switch (_mode)
+        {
+            case FlashlightMode.Weak:   return weakBatteryMultiplier;
+            case FlashlightMode.Strong: return strongBatteryMultiplier;
+            default:                    return 1f;
+        }
+    }
+
     private void UpdateShaderGlobals()
     {
-        bool active = isOn && flashlight != null;
+        bool active = _mode != FlashlightMode.Off && flashlight != null;
         Shader.SetGlobalFloat(PropEnabled, active ? 1f : 0f);
 
         if (!active) return;
 
         float cosHalfAngle = Mathf.Cos(flashlight.spotAngle * 0.5f * Mathf.Deg2Rad);
-        Shader.SetGlobalVector(PropPos, transform.position);
-        Shader.SetGlobalVector(PropDir, transform.forward);
-        Shader.SetGlobalFloat(PropCosAngle, cosHalfAngle);
-        Shader.SetGlobalFloat(PropRange, flashlight.range);
+        Shader.SetGlobalVector(PropPos,      transform.position);
+        Shader.SetGlobalVector(PropDir,      transform.forward);
+        Shader.SetGlobalFloat(PropCosAngle,  cosHalfAngle);
+        Shader.SetGlobalFloat(PropRange,     flashlight.range);
     }
 
     private void HandleBeam()
     {
-        Vector3 origin = transform.position;
+        Vector3 origin    = transform.position;
         Vector3 direction = transform.forward;
 
-        float effectiveDistance = maxDistance;
+        bool  spotOnly       = _mode == FlashlightMode.Weak || !damageEnemies;
+        float effectMult     = _mode == FlashlightMode.Strong ? strongEffectMultiplier : 1f;
+        float currentMaxDist = GetCurrentMaxDistance();
+        float currentHitRad  = GetCurrentHitRadius();
+
+        float effectiveDistance = currentMaxDist;
         if (obstacleLayers != 0 &&
-            Physics.Raycast(origin, direction, out RaycastHit obstacleHit, maxDistance, obstacleLayers))
+            Physics.Raycast(origin, direction, out RaycastHit obstacleHit, currentMaxDist, obstacleLayers))
         {
             effectiveDistance = obstacleHit.distance;
         }
 
         RaycastHit[] hits = Physics.SphereCastAll(
-            origin, hitRadius, direction, effectiveDistance, enemyLayers);
+            origin, currentHitRad, direction, effectiveDistance, enemyLayers);
 
         HashSet<EnemyController> litThisFrame = new HashSet<EnemyController>();
         float halfSpotAngle = flashlight != null ? flashlight.spotAngle * 0.5f : 30f;
@@ -130,20 +195,19 @@ public class FlashlightController : MonoBehaviour
             EnemyController enemy = hit.collider.GetComponentInParent<EnemyController>();
             if (enemy == null) continue;
 
-            float hitDistance = Vector3.Distance(origin, hit.point);
-            float distanceFraction = Mathf.Clamp01(hitDistance / maxDistance);
+            float hitDistance     = Vector3.Distance(origin, hit.point);
+            float distanceFraction = Mathf.Clamp01(hitDistance / currentMaxDist);
             float effectFactor = Mathf.Lerp(1f, minEffectAtMaxDistance,
-                Mathf.InverseLerp(fullEffectDistance / maxDistance, 1f, distanceFraction));
+                Mathf.InverseLerp(fullEffectDistance / currentMaxDist, 1f, distanceFraction));
+            effectFactor *= effectMult;
 
             Vector3 dirToEnemy = (hit.collider.transform.position - origin).normalized;
-            float angle = Vector3.Angle(direction, dirToEnemy);
-            float angleVis = Mathf.Clamp01(1f - (angle / halfSpotAngle));
-            float visibility = angleVis * effectFactor;
+            float   angle      = Vector3.Angle(direction, dirToEnemy);
+            float   angleVis   = Mathf.Clamp01(1f - (angle / halfSpotAngle));
+            float   visibility = angleVis * effectFactor;
 
             enemy.SetTargetVisibility(visibility);
-
-            // Geef de zaklamprichting mee zodat geesten er actief van weg kunnen sturen
-            enemy.ReceiveFlashlightHit(effectFactor, direction);
+            enemy.ReceiveFlashlightHit(effectFactor, direction, spotOnly);
 
             litThisFrame.Add(enemy);
         }
@@ -153,6 +217,26 @@ public class FlashlightController : MonoBehaviour
                 enemy.SetTargetVisibility(0f);
 
         _litEnemies = litThisFrame;
+    }
+
+    private float GetCurrentMaxDistance()
+    {
+        switch (_mode)
+        {
+            case FlashlightMode.Weak:   return weakRange;
+            case FlashlightMode.Strong: return strongRange;
+            default:                    return maxDistance;
+        }
+    }
+
+    private float GetCurrentHitRadius()
+    {
+        switch (_mode)
+        {
+            case FlashlightMode.Weak:   return weakHitRadius;
+            case FlashlightMode.Strong: return strongHitRadius;
+            default:                    return hitRadius;
+        }
     }
 
     private void OnDrawGizmosSelected()

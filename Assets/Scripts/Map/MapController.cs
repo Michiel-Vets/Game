@@ -69,6 +69,12 @@ public class MapController : MonoBehaviour
     /// <summary>Hoeveel meter de harde muur (hitbox) voor de visuele kaartrand zit.</summary>
     public float HardWallInset => hardWallInset;
 
+    /// <summary>Binnenste radius van het meest recent gegroeide ring-gebied (vóór de laatste wave-update).</summary>
+    public float GrowthRingInnerRadius { get; private set; }
+
+    /// <summary>Buitenste radius van het meest recent gegroeide ring-gebied (na de laatste wave-update).</summary>
+    public float GrowthRingOuterRadius { get; private set; }
+
     // ── Privé ─────────────────────────────────────────────────────────────────
 
     private float          _targetRadius;
@@ -82,6 +88,8 @@ public class MapController : MonoBehaviour
         Instance      = this;
         CurrentRadius = minRadius;
         _targetRadius = minRadius;
+        GrowthRingInnerRadius = minRadius;
+        GrowthRingOuterRadius = minRadius;
     }
 
     private void Start()
@@ -111,6 +119,8 @@ public class MapController : MonoBehaviour
     /// </summary>
     public void UpdateForWave(int waveNumber, float missedFraction = 0f)
     {
+        GrowthRingInnerRadius = _targetRadius; // sla op vóór de update
+
         if (missedFraction > 0.02f)
         {
             float shrink  = maxShrinkPerWave * missedFraction;
@@ -123,6 +133,8 @@ public class MapController : MonoBehaviour
                 minRadius,
                 maxRadius);
         }
+
+        GrowthRingOuterRadius = _targetRadius; // sla op na de update
     }
 
     // ── Interne helpers ───────────────────────────────────────────────────────

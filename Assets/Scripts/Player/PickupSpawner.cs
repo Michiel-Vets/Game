@@ -85,14 +85,32 @@ public class PickupSpawner : MonoBehaviour
     {
         if (prefab == null) return;
 
-        // Spawn binnen de harde muur: kaartrand minus hardWallInset
-        float effectiveRadius = MapController.Instance != null
-            ? MapController.Instance.CurrentRadius - MapController.Instance.HardWallInset
-            : spawnRadius;
+        float outerRadius, innerRadius;
+
+        if (MapController.Instance != null)
+        {
+            float inset = MapController.Instance.HardWallInset;
+            outerRadius = Mathf.Max(0f, MapController.Instance.GrowthRingOuterRadius - inset);
+            innerRadius = Mathf.Max(0f, MapController.Instance.GrowthRingInnerRadius - inset);
+
+            // Geen of te kleine groei → spawn overal op de kaart
+            if (outerRadius - innerRadius < 2f)
+                innerRadius = 0f;
+        }
+        else
+        {
+            outerRadius = spawnRadius;
+            innerRadius = 0f;
+        }
 
         for (int attempt = 0; attempt < 10; attempt++)
         {
-            Vector2 random2D = Random.insideUnitCircle * effectiveRadius;
+            // Uniforme steekproef in een ring
+            float minR2  = innerRadius * innerRadius;
+            float maxR2  = outerRadius * outerRadius;
+            float r      = Mathf.Sqrt(Random.Range(minR2, maxR2 + 0.001f));
+            float angle  = Random.Range(0f, Mathf.PI * 2f);
+            Vector2 random2D = new Vector2(Mathf.Cos(angle) * r, Mathf.Sin(angle) * r);
             Vector3 candidate = transform.position + new Vector3(random2D.x, 0f, random2D.y);
 
             if (Vector3.Distance(candidate, player.position) < minDistanceFromPlayer)

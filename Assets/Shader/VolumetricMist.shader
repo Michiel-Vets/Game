@@ -202,14 +202,34 @@ float get_wall_density(float3 worldPos, float distFromPlayer, float effectiveVis
                 float height = worldPos.y - _FloorY;
                 if (height < 0 || height > _FogHeight) return 0;
 
-                float heightT       = saturate(height / _FogHeight);
+                float heightT = saturate(height / _FogHeight);
                 float wallHeightFactor = lerp(0.6, 1.0, heightT);
 
+                float density;
                 if (distFromCenter >= _MapRadius)
-                    return _MapWallDensity * 8.0 * wallHeightFactor;
+                    density = _MapWallDensity * 8.0 * wallHeightFactor;
+                else
+                {
+                    float t = saturate((distFromCenter - wallStart) / max(_MapWallInset, 0.001));
+                    density = t * t * t * _MapWallDensity * wallHeightFactor;
+                }
 
-                float t = saturate((distFromCenter - wallStart) / max(_MapWallInset, 0.001));
-                return t * t * t * _MapWallDensity * wallHeightFactor;
+                // Knip een gat in de muur voor elke geest in MistEntry-state
+                int ghostCount = (int)_DisplacerCount;
+                for (int gi = 0; gi < ghostCount && gi < 16; gi++)
+                {
+                    float3 ghostPos = _DisplacerPositions[gi].xyz;
+                    float  dx       = worldPos.x - ghostPos.x;
+                    float  dz       = worldPos.z - ghostPos.z;
+                    float  xzDist   = sqrt(dx * dx + dz * dz);
+                    if (xzDist < _MapWallGhostRadius)
+                    {
+                        float openT = 1.0 - saturate(xzDist / max(_MapWallGhostRadius, 0.001));
+                        density    *= (1.0 - openT * openT * openT);
+                    }
+                }
+
+                return density;
             }
 
             // ── Fragment ──────────────────────────────────────────────────────

@@ -274,6 +274,9 @@ public class EnemyController : MonoBehaviour
     private bool _isAttackModeVisible = false;
     private Vector3 _baseScale; // basisschaal vóór alle mode- en aggression-scalings
 
+    private bool _hasPassedMistWall = false;
+    private bool _isMistEntryDisplacer = false;
+
     // ── Unity lifecycle ──────────────────────────────────────────────────────
 
     private void Awake()
@@ -320,6 +323,8 @@ public class EnemyController : MonoBehaviour
 
         _baseScale = transform.localScale;
         state = BehaviourState.MistEntry; // begin altijd met door de mistwand laden
+        VolumetricMistController.Register(transform);
+        _isMistEntryDisplacer = true;
     }
 
     private void OnEnable()
@@ -327,7 +332,20 @@ public class EnemyController : MonoBehaviour
         if (!_allActive.Contains(this)) _allActive.Add(this);
     }
 
-    private void OnDisable() => _allActive.Remove(this);
+    private void OnDisable()
+    {
+        _allActive.Remove(this);
+        UnregisterMistDisplacer();
+    }
+
+    private void UnregisterMistDisplacer()
+    {
+        if (_isMistEntryDisplacer)
+        {
+            VolumetricMistController.Unregister(transform);
+            _isMistEntryDisplacer = false;
+        }
+    }
 
     private void Start()
     {
@@ -517,9 +535,12 @@ public class EnemyController : MonoBehaviour
 
     // ── Flashlight ───────────────────────────────────────────────────────────
 
-    public void ReceiveFlashlightHit(float effectFactor = 1f, Vector3 beamDirection = default)
+    public void ReceiveFlashlightHit(float effectFactor = 1f, Vector3 beamDirection = default, bool spotOnly = false)
     {
         if (state == BehaviourState.Dying || state == BehaviourState.Fleeing) return;
+
+        // spotOnly = zwakke modus: alleen zichtbaar maken, geen damage of vertraging
+        if (spotOnly) return;
 
         isInFlashlightBeam = true;
         flashlightEffectFactor = Mathf.Max(flashlightEffectFactor, effectFactor);
@@ -615,7 +636,7 @@ public class EnemyController : MonoBehaviour
         float damageOpacity = Mathf.Clamp01(flashlightDamage + _materializationProgress);
 
         float naturalBase = state == BehaviourState.Retreat ? 0f : _materializationProgress;
-        float ambientTarget = Mathf.Max(_targetVisibility, naturalBase, baseVisibility);
+        float ambientTarget = Mathf.Max(_targetVisibility, naturalBase);
 
         if (playerTarget != null)
         {
@@ -734,9 +755,12 @@ public class EnemyController : MonoBehaviour
 
         if (state == BehaviourState.MistEntry)
         {
-            // Laad recht naar binnen totdat de geest voorbij de harde muur is
             if (IsInsideHardWall())
+            {
+                _hasPassedMistWall = true;
+                UnregisterMistDisplacer();
                 TransitionToAttack(distToPlayer);
+            }
             return;
         }
 
@@ -1183,6 +1207,20 @@ public class EnemyController : MonoBehaviour
         // MistEntry-geesten laden recht naar binnen: geen enkele boundary-push
         if (state == BehaviourState.MistEntry) return Vector3.zero;
 
+        // Geesten die al door de muur zijn mogen er niet meer uit
+        if (_hasPassedMistWall && MapController.Instance != null)
+        {
+            Vector3 mapCenter = MapController.Instance.PlatformCenter;
+            float wallRadius = MapController.Instance.CurrentRadius - MapController.Instance.HardWallInset;
+            Vector3 pos = transform.position;
+            float flatDist = new Vector2(pos.x - mapCenter.x, pos.z - mapCenter.z).magnitude;
+            if (flatDist >= wallRadius - boundaryLookAhead)
+            {
+                Vector3 toCenter = new Vector3(mapCenter.x - pos.x, 0f, mapCenter.z - pos.z);
+                return toCenter.normalized;
+            }
+        }
+
         // Bij een circulaire map: vijanden die buiten de rand spawnen mogen vrij
         // naar de speler toe vliegen. Boundary-check alleen voor vijanden die
         // al op het platform staan (binnen de map-radius).
@@ -1221,6 +1259,9 @@ public class EnemyController : MonoBehaviour
 
     private float GetTargetSpeed(float distToPlayer)
     {
+        if (state == BehaviourState.MistEntry)
+            return Mathf.Min(moveSpeed, _baseSpeed * 1.2f); // cap entry speed ongeacht wave-multipliers
+
         if (state == BehaviourState.Weakened)
         {
             float speedFraction = 1f - flashlightEffectFactor * 0.9f;
@@ -1266,8 +1307,8 @@ public class EnemyController : MonoBehaviour
 
         if (state == BehaviourState.Weakened || isInFlashlightBeam)
         {
-            float fallSpeed = diff < 0f ? weakenedFallSpeed : verticalSpeed * 0.3f;
-            return Mathf.Clamp(diff * fallSpeed, -weakenedFallSpeed, verticalSpeed * 0.3f);
+            float upSpeed = verticalSpeed * 0.55f;
+            return Mathf.Clamp(diff * upSpeed, -verticalSpeed * 0.4f, upSpeed);
         }
 
         float speed = IsObstacleAhead() ? obstacleLiftSpeed : verticalSpeed;
@@ -1281,7 +1322,7 @@ public class EnemyController : MonoBehaviour
         float maxHeight = surfaceY + maxFloatHeight;
 
         if (state == BehaviourState.Weakened || isInFlashlightBeam)
-            return Mathf.Lerp(restHeight, surfaceY + weakenedMinFloatHeight, flashlightDamage);
+            return Mathf.Lerp(restHeight, surfaceY + maxFloatHeight * 0.65f, flashlightDamage);
 
         float desiredHeight = surfaceY + currentTargetHeight
             + (wantsToFlyHigh ? personalExtraFlyHeight : 0f);

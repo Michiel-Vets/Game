@@ -217,7 +217,7 @@ public class PlayerController : MonoBehaviour
     private void HandleFlashlightKeyboardFallback()
     {
         if (Keyboard.current != null && Keyboard.current.fKey.wasPressedThisFrame && flashlightController != null)
-            flashlightController.Toggle();
+            flashlightController.CycleMode();
     }
 
     private void HandleDebugHealthInput()
