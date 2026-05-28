@@ -85,9 +85,9 @@ public class PickupSpawner : MonoBehaviour
     {
         if (prefab == null) return;
 
-        // Als MapController actief is, spawn altijd binnen de huidige map-rand
+        // Spawn binnen de harde muur: kaartrand minus hardWallInset
         float effectiveRadius = MapController.Instance != null
-            ? MapController.Instance.CurrentRadius * 0.85f
+            ? MapController.Instance.CurrentRadius - MapController.Instance.HardWallInset
             : spawnRadius;
 
         for (int attempt = 0; attempt < 10; attempt++)

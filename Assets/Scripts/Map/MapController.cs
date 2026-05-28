@@ -20,8 +20,8 @@ public class MapController : MonoBehaviour
     [Header("Platform")]
     [Tooltip("Sleep hier het cilinder-platform naartoe.")]
     [SerializeField] private Transform platformTransform;
-    [Tooltip("Hoeveel world-radius geeft localScale.x = 1? Voor Unity's ingebouwde Cylinder = 1.")]
-    [SerializeField] private float cylinderScaleFactor = 1f;
+    [Tooltip("Hoeveel world-radius geeft localScale.x = 1? Voor Unity's ingebouwde Cylinder-primitief = 0.5 (diameter=1, dus radius=0.5).")]
+    [SerializeField] private float cylinderScaleFactor = 0.5f;
 
     [Header("Radius Scaling")]
     [Tooltip("Startradius van het platform (wave 1).")]
@@ -38,6 +38,10 @@ public class MapController : MonoBehaviour
     [Header("Fog")]
     [Tooltip("Sleep hier het fog material (VolumetricMist) naartoe zodat de muur meegroeit.")]
     [SerializeField] private Material fogMaterial;
+    [Tooltip("Hoeveel meter de harde muur (hitbox) voor de visuele kaartrand zit.")]
+    [SerializeField] private float hardWallInset = 5f;
+    [Tooltip("Hoeveel meter de mist-fade voor de harde muur begint (richting het center).")]
+    [SerializeField] private float mapWallFadeWidth = 10f;
 
     [Header("Boundary Wall")]
     [Tooltip("Aantal onzichtbare muursegmenten rond de kaartrand.")]
@@ -61,6 +65,9 @@ public class MapController : MonoBehaviour
     public Vector3 PlatformCenter => platformTransform != null
         ? platformTransform.position
         : transform.position;
+
+    /// <summary>Hoeveel meter de harde muur (hitbox) voor de visuele kaartrand zit.</summary>
+    public float HardWallInset => hardWallInset;
 
     // ── Privé ─────────────────────────────────────────────────────────────────
 
@@ -147,17 +154,18 @@ public class MapController : MonoBehaviour
     {
         if (fogMaterial != null)
         {
-            fogMaterial.SetFloat("_MapRadius",    CurrentRadius);
-            fogMaterial.SetFloat("_GroundRadius", CurrentRadius);
+            float hardWallRadius = CurrentRadius - hardWallInset;
+            fogMaterial.SetFloat("_MapRadius",       hardWallRadius);   // positie harde muur
+            fogMaterial.SetFloat("_GroundRadius",    CurrentRadius);    // visuele kaartrand
+            fogMaterial.SetFloat("_MapWallInset",    mapWallFadeWidth); // breedte mist-fade
             Vector3 center = PlatformCenter;
             fogMaterial.SetFloat("_GroundCenterX", center.x);
             fogMaterial.SetFloat("_GroundCenterZ", center.z);
         }
         else
         {
-            // Fallback als het material niet is ingesteld
-            Shader.SetGlobalFloat("_MapRadius",    CurrentRadius);
-            Shader.SetGlobalFloat("_GroundRadius", CurrentRadius);
+            Debug.LogWarning("[MapController] fogMaterial is niet ingesteld! " +
+                             "Sleep VolumetricFogMat naar het Fog Material veld.", this);
         }
     }
 
@@ -178,7 +186,10 @@ public class MapController : MonoBehaviour
         {
             GameObject seg = new GameObject($"WallSeg_{i}");
             seg.transform.SetParent(wallRoot.transform);
-            _wallSegmentColliders[i]  = seg.AddComponent<BoxCollider>();
+            var col = seg.AddComponent<BoxCollider>();
+            col.isTrigger = true; // trigger zodat vijanden vrij naar binnen kunnen vliegen;
+                                  // MapBoundary.cs houdt de speler al via code tegen
+            _wallSegmentColliders[i]  = col;
             _wallSegmentTransforms[i] = seg.transform;
         }
     }
@@ -191,7 +202,7 @@ public class MapController : MonoBehaviour
     {
         if (_wallSegmentTransforms == null) return;
 
-        float wallRadius = CurrentRadius + wallEdgeOffset;
+        float wallRadius = (CurrentRadius - hardWallInset) + wallEdgeOffset;
 
         // Breedte per segment = stuk van de omtrek + kleine overlap om gaten te voorkomen
         float segmentWidth = (2f * Mathf.PI * wallRadius / wallSegments) + 0.5f;

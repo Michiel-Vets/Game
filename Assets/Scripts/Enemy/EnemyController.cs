@@ -8,6 +8,7 @@ public class EnemyController : MonoBehaviour
     {
         Inactive, Chase, Flank, Intercept, Lunge, Recoil,
         Retreat, Weakened, Fleeing, Dying,
+        MistEntry, // achteraan zodat bestaande animator-int-waarden niet verschuiven
     }
 
     private static int formationCounter;
@@ -271,6 +272,7 @@ public class EnemyController : MonoBehaviour
 
     private bool _isScoutMode = false;
     private bool _isAttackModeVisible = false;
+    private Vector3 _baseScale; // basisschaal vóór alle mode- en aggression-scalings
 
     // ── Unity lifecycle ──────────────────────────────────────────────────────
 
@@ -315,6 +317,9 @@ public class EnemyController : MonoBehaviour
         sprintStamina = maxSprintStamina;
 
         effectiveInterceptLookAhead = interceptLookAheadMin;
+
+        _baseScale = transform.localScale;
+        state = BehaviourState.MistEntry; // begin altijd met door de mistwand laden
     }
 
     private void OnEnable()
@@ -471,6 +476,8 @@ public class EnemyController : MonoBehaviour
 
         float scaleFactor = Mathf.Lerp(scaleAtMinAggression, scaleAtMaxAggression, t);
         originalScale = transform.localScale * scaleFactor;
+        // Geesten mogen maximaal 0.8× zo klein worden als hun basisschaal
+        originalScale = Vector3.Max(originalScale, _baseScale * 0.8f);
         transform.localScale = originalScale;
 
         float cooldownReduction = maxLungeCooldownReduction * antT;
@@ -725,6 +732,14 @@ public class EnemyController : MonoBehaviour
             return;
         }
 
+        if (state == BehaviourState.MistEntry)
+        {
+            // Laad recht naar binnen totdat de geest voorbij de harde muur is
+            if (IsInsideHardWall())
+                TransitionToAttack(distToPlayer);
+            return;
+        }
+
         if (state == BehaviourState.Inactive)
         {
             startDelay -= dt;
@@ -951,6 +966,37 @@ public class EnemyController : MonoBehaviour
         flankAngle += orbitDelta;
     }
 
+    // ── MistEntry helpers ────────────────────────────────────────────────────
+
+    private bool IsInsideHardWall()
+    {
+        if (MapController.Instance == null) return true;
+        float hardWallRadius = MapController.Instance.CurrentRadius - MapController.Instance.HardWallInset;
+        Vector3 center = MapController.Instance.PlatformCenter;
+        float flatDist = new Vector2(
+            transform.position.x - center.x,
+            transform.position.z - center.z).magnitude;
+        return flatDist <= hardWallRadius;
+    }
+
+    private Vector3 GetMistEntryDirection()
+    {
+        // Recht op de speler af; als die onbekend is, naar het midden van de map
+        if (playerTarget != null)
+        {
+            Vector3 toPlayer = playerTarget.position - transform.position;
+            toPlayer.y = 0f;
+            if (toPlayer.sqrMagnitude > 0.01f) return toPlayer.normalized;
+        }
+        if (MapController.Instance != null)
+        {
+            Vector3 toCenter = MapController.Instance.PlatformCenter - transform.position;
+            toCenter.y = 0f;
+            if (toCenter.sqrMagnitude > 0.01f) return toCenter.normalized;
+        }
+        return transform.forward;
+    }
+
     // ── Movement ─────────────────────────────────────────────────────────────
 
     private void ApplyMovement(float dt)
@@ -1029,13 +1075,14 @@ public class EnemyController : MonoBehaviour
     {
         switch (state)
         {
-            case BehaviourState.Chase: return toPlayerFlat;
-            case BehaviourState.Intercept: return GetInterceptDirection(toPlayerFlat, distToPlayer);
-            case BehaviourState.Flank: return GetFlankDirection(toPlayerFlat, distToPlayer);
-            case BehaviourState.Weakened: return GetWeakenedDirection(toPlayerFlat, distToPlayer);
-            case BehaviourState.Fleeing: return fleeDirection;
-            case BehaviourState.Retreat: return retreatDirection;
-            default: return toPlayerFlat;
+            case BehaviourState.MistEntry:  return GetMistEntryDirection();
+            case BehaviourState.Chase:      return toPlayerFlat;
+            case BehaviourState.Intercept:  return GetInterceptDirection(toPlayerFlat, distToPlayer);
+            case BehaviourState.Flank:      return GetFlankDirection(toPlayerFlat, distToPlayer);
+            case BehaviourState.Weakened:   return GetWeakenedDirection(toPlayerFlat, distToPlayer);
+            case BehaviourState.Fleeing:    return fleeDirection;
+            case BehaviourState.Retreat:    return retreatDirection;
+            default:                        return toPlayerFlat;
         }
     }
 
@@ -1133,6 +1180,9 @@ public class EnemyController : MonoBehaviour
 
     private Vector3 GetBoundaryPush()
     {
+        // MistEntry-geesten laden recht naar binnen: geen enkele boundary-push
+        if (state == BehaviourState.MistEntry) return Vector3.zero;
+
         // Bij een circulaire map: vijanden die buiten de rand spawnen mogen vrij
         // naar de speler toe vliegen. Boundary-check alleen voor vijanden die
         // al op het platform staan (binnen de map-radius).

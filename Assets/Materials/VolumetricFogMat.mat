@@ -117,6 +117,7 @@ Material:
     - _GroundRadius: 149
     - _HeightPower: 2
     - _LightScattering: 0.2
+    - _MapRadius: 75
     - _MapWallDensity: 6
     - _MapWallGhostRadius: 8
     - _MaxDistance: 40

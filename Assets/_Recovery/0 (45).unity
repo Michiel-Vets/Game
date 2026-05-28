@@ -6219,11 +6219,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 46090c4c1bfc10842b4a82e5ca67a5cd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HealthController
-  maxHealth: 100
-  currentHealth: 0
-  healthBar: {fileID: 0}
-  fullWidth: 200
-  barHeight: 20
 --- !u!1 &1378751801
 GameObject:
   m_ObjectHideFlags: 0
@@ -6849,11 +6844,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 46090c4c1bfc10842b4a82e5ca67a5cd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HealthController
-  maxHealth: 100
-  currentHealth: 0
-  healthBar: {fileID: 0}
-  fullWidth: 200
-  barHeight: 20
 --- !u!114 &1444180903
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -7497,11 +7487,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 46090c4c1bfc10842b4a82e5ca67a5cd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HealthController
-  maxHealth: 100
-  currentHealth: 0
-  healthBar: {fileID: 0}
-  fullWidth: 200
-  barHeight: 20
 --- !u!114 &1748236546
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -8377,19 +8362,17 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MapController
   platformTransform: {fileID: 1892995496}
-  cylinderScaleFactor: 0.5
-  minRadius: 50
+  cylinderScaleFactor: 1
+  minRadius: 20
   maxRadius: 400
   radiusGrowthPerWave: 12.5
   maxShrinkPerWave: 20
   growthSpeed: 10
   fogMaterial: {fileID: 2100000, guid: f8309d28fa17a724fa927a8417d3f606, type: 2}
-  hardWallInset: 10
-  mapWallFadeWidth: 10
   wallSegments: 24
   wallHeight: 5
   wallThickness: 0.4
-  wallEdgeOffset: 10
+  wallEdgeOffset: 0
 --- !u!4 &1834712172
 Transform:
   m_ObjectHideFlags: 0

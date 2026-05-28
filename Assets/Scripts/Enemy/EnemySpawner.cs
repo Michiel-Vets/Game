@@ -109,10 +109,11 @@ public class EnemySpawner : MonoBehaviour
         }
         else
         {
-            // Andere waves: groepen spawnen doorheen de wave
-            _remainingToSpawn = currentSpawnCap;
-            _groupTimer = 0f; // eerste groep meteen
-            isActive = true;
+            // Alle geesten spawnen tegelijk zodat ze samen door de mistwand laden
+            for (int i = 0; i < currentSpawnCap; i++)
+                SpawnSingleEnemy(currentSpawnDirection);
+            _remainingToSpawn = 0;
+            isActive = false;
         }
     }
 

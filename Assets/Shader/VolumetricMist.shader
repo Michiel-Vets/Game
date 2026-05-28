@@ -34,6 +34,7 @@ Shader "Custom/VolumetricFog"
         _MapRadius("Map radius", Float) = 100
         _MapWallDensity("Map wall density", Range(0, 20)) = 6
         _MapWallGhostRadius("Ghost opening radius", Float) = 8
+        _MapWallInset("Map wall inset (m)", Float) = 5
     }
 
     SubShader
@@ -77,6 +78,7 @@ Shader "Custom/VolumetricFog"
                 float  _MapRadius;
                 float  _MapWallDensity;
                 float  _MapWallGhostRadius;
+                float  _MapWallInset;
             CBUFFER_END
 
             TEXTURE3D(_FogNoise);
@@ -130,7 +132,6 @@ Shader "Custom/VolumetricFog"
            float get_fog_density(float3 worldPos, float distFromPlayer)
 {
     if (!within_ground_bounds(worldPos)) return 0;
-    if (distFromPlayer >= _VisibilityDistance) return 0;
 
     float height = worldPos.y - _FloorY;
     if (height < 0 || height > _FogHeight) return 0;
@@ -139,8 +140,17 @@ Shader "Custom/VolumetricFog"
     float heightFalloff = pow(1.0 - heightT, _HeightPower);
     if (heightFalloff < 0.001) return 0;
 
+    // Achtergrond-haze vult de kloof tussen persoonlijke fog-zone en kaartrand-muur.
+    // Neemt toe van 0 (bij speler) tot een constante dunne sluier voorbij _VisibilityDistance.
+    float distFactor = saturate(distFromPlayer / max(_VisibilityDistance, 0.001));
+    float hazeDensity = distFactor * distFactor * 0.06 * heightFalloff;
+
+    // Noise fog bestaat alleen binnen de zichtbaarheidszone; zacht uitgeblust.
+    float noiseFade = saturate(1.0 - distFromPlayer / max(_VisibilityDistance, 0.001));
+    if (noiseFade <= 0.001) return hazeDensity;
+
     float4 noise   = _FogNoise.SampleLevel(sampler_FogNoise, worldPos * 0.01 * _NoiseTiling, 0);
-    float  density = saturate(dot(noise, noise) - _DensityThreshold) * _DensityMultiplier * heightFalloff;
+    float  density = saturate(dot(noise, noise) - _DensityThreshold) * _DensityMultiplier * heightFalloff * noiseFade;
 
     float2 trailUV = float2(
         (worldPos.x - _MistTrailOriginX) / _MistTrailWorldSize,
@@ -149,13 +159,7 @@ Shader "Custom/VolumetricFog"
     float trail = SAMPLE_TEXTURE2D_LOD(_MistTrailMap, sampler_MistTrailMap, trailUV, 0).r;
     density *= trail;
 
-    // Gegarandeerde gradient: altijd iets meer mist hoe verder van de speler,
-    // zodat objecten consequent minder zichtbaar worden op afstand
-    float distFactor    = saturate(distFromPlayer / _VisibilityDistance);
-    float gradientFog   = distFactor * distFactor * 0.15 * heightFalloff;
-    density             = max(density, gradientFog);
-
-    return density;
+    return max(density, hazeDensity);
 }
 
 // effectiveVis = min(_VisibilityDistance, afstand tot kaartrand langs deze ray)
@@ -170,7 +174,9 @@ float get_wall_density(float3 worldPos, float distFromPlayer, float effectiveVis
     float heightT = saturate(height / _FogHeight);
     float wallHeightFactor = lerp(0.6, 1.0, heightT);
 
-    float wallStart = effectiveVis * 0.65;
+    // Gradient start sluit naadloos aan op het einde van de persoonlijke fog-zone.
+    // Zo is er geen open kloof tussen de twee systemen, ongeacht hoe groot de map is.
+    float wallStart = min(_VisibilityDistance, effectiveVis * 0.9);
 
     if (distFromPlayer >= effectiveVis)
         return _WallDensity * 8.0 * wallHeightFactor;
@@ -183,19 +189,27 @@ float get_wall_density(float3 worldPos, float distFromPlayer, float effectiveVis
     return 0;
 }
 
-            // ── Mist buiten de kaartrand ─────────────────────────────────────────
-            // Voegt ondoordringbare mist toe voor rays die voorbij de rand komen.
-            // Het zichtbaar maken van de rand zelf gebeurt via effectiveVis in get_wall_density.
+            // ── Mist muur op de kaartrand ────────────────────────────────────────
+            // Bouwt geleidelijk op vanaf _MapRadius - _MapWallInset (kubische curve,
+            // identiek aan de persoonlijke mist muur) en wordt volledig ondoordringbaar
+            // voorbij de map-rand zelf.
 
             float get_map_wall_density(float3 worldPos, float distFromCenter)
             {
-                if (distFromCenter <= _MapRadius) return 0;
+                float wallStart = _MapRadius - _MapWallInset;
+                if (distFromCenter <= wallStart) return 0;
 
                 float height = worldPos.y - _FloorY;
                 if (height < 0 || height > _FogHeight) return 0;
 
-                float heightT = saturate(height / _FogHeight);
-                return _MapWallDensity * 8.0 * lerp(0.6, 1.0, heightT);
+                float heightT       = saturate(height / _FogHeight);
+                float wallHeightFactor = lerp(0.6, 1.0, heightT);
+
+                if (distFromCenter >= _MapRadius)
+                    return _MapWallDensity * 8.0 * wallHeightFactor;
+
+                float t = saturate((distFromCenter - wallStart) / max(_MapWallInset, 0.001));
+                return t * t * t * _MapWallDensity * wallHeightFactor;
             }
 
             // ── Fragment ──────────────────────────────────────────────────────
@@ -224,10 +238,14 @@ float get_wall_density(float3 worldPos, float distFromPlayer, float effectiveVis
                 float  rB       = 2.0 * dot(camXZ, dirXZ);
                 float  rC       = dot(camXZ, camXZ) - _MapRadius * _MapRadius;
                 float  rDisc    = rB * rB - 4.0 * rA * rC;
-                float  tEdge    = (rDisc >= 0.0 && rA > 0.0001)
-                                    ? (-rB + sqrt(rDisc)) / (2.0 * rA)
-                                    : _VisibilityDistance;
-                float  effectiveVis = min(_VisibilityDistance, max(tEdge, 0.5));
+                // tEdge is de 3D rayparameter bij de kaartrand.
+                // distFromPlayer is XZ-afstand → vermenigvuldig met sqrt(rA) = |dirXZ|
+                // zodat effectiveVis in dezelfde eenheden staat als distFromPlayer.
+                float  sqrtRa   = sqrt(max(rA, 0.0001));
+                float  tEdgeXZ  = (rDisc >= 0.0 && rA > 0.0001)
+                                    ? (-rB + sqrt(rDisc)) / (2.0 * sqrtRa)
+                                    : _MapRadius;
+                float  effectiveVis = max(tEdgeXZ, 0.5);
 
                 float  transmittance = 1.0;
                 float3 fogAccum      = float3(0, 0, 0);
@@ -277,8 +295,9 @@ float get_wall_density(float3 worldPos, float distFromPlayer, float effectiveVis
                             fogAccum += litFog * fogDensity * _StepSize * transmittance;
                         }
 
-                        // Muur (speler-zichtmuur + rand-muur) — puur grijs, geen belichting
-                        wallAccum += _WallColor.rgb * (wallDensity + mapWallDensity) * _StepSize * transmittance;
+                        // Muur — Beer-Lambert: 1-exp(-d*s) geeft altijd 0..1, nooit overbright
+                        float wallAlpha = 1.0 - exp(-(wallDensity + mapWallDensity) * _StepSize);
+                        wallAccum += _WallColor.rgb * wallAlpha * transmittance;
 
                         // Zaklamp scattering
                         float flashContrib = flashlight_contribution(rayPos);
