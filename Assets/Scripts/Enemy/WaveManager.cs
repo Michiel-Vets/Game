@@ -56,6 +56,14 @@ public class WaveManager : MonoBehaviour
     [SerializeField] private WaveTooltipUI tooltipUI;
     [SerializeField] private WaveClearUI clearUI;
 
+    [Header("Mist Pillar")]
+    [Tooltip("Sleep hier het MistPillar-object uit de scène.")]
+    [SerializeField] private MistPillar mistPillar;
+    [Tooltip("Seconden vóór de wave dat de zuil verschijnt.")]
+    [SerializeField] private float pillarShowBeforeWave = 10f;
+
+    private bool _pillarShownThisBreak;
+
     [Header("Wave Clear Penalty")]
     [Tooltip("Maximale extra moeilijkheidsboost als een wave helemaal niet gecleared wordt (0–1).")]
     [SerializeField, Range(0f, 1f)] private float maxClearPenalty = 0.4f;
@@ -70,6 +78,22 @@ public class WaveManager : MonoBehaviour
     public WaveType CurrentWaveType { get; private set; }
     public bool IsSpecialWave => CurrentWaveType != WaveType.Normal;
     public Vector3 CurrentWaveSpawnDirection { get; private set; }
+    public int TotalKillCount { get; private set; }
+
+    public Vector3 NextWaveHintPosition
+    {
+        get
+        {
+            float mapRadius = MapController.Instance != null
+                ? MapController.Instance.CurrentRadius - MapController.Instance.HardWallInset
+                : 40f;
+            Vector3 center = MapController.Instance != null
+                ? MapController.Instance.PlatformCenter
+                : Vector3.zero;
+            Vector3 dir = _hasPrerolledDirection ? _prerolledSpawnDirection : Vector3.forward;
+            return center + dir.normalized * mapRadius;
+        }
+    }
 
     // Wave-clear tracking
     private int _waveKillCount;
@@ -83,6 +107,8 @@ public class WaveManager : MonoBehaviour
     private bool difficultyApplied;
     private float scoutTimer;
     private int wavesSinceLastSpecial = 0;
+    private Vector3 _prerolledSpawnDirection;
+    private bool _hasPrerolledDirection;
 
     // Gemak-property zodat multiplier-methodes schoon blijven
     private float ClearPenaltyMult => 1f + _pendingPenalty;
@@ -108,11 +134,13 @@ public class WaveManager : MonoBehaviour
     /// <summary>Aanroepen zodra een enemy sterft (zaklamp of aanval).</summary>
     public void NotifyEnemyKilled()
     {
+        TotalKillCount++;
         if (IsBreak) return;
         _waveKillCount++;
         int displayTotal = (_totalWaveEnemies > 0 && _totalWaveEnemies < int.MaxValue)
             ? _totalWaveEnemies : _waveTotalSpawned;
         clearUI?.UpdateProgress(_waveKillCount, displayTotal);
+        ComboSystem.Instance?.NotifyKill();
 
         // Toon "WAVE CLEARED" pas als écht alle geplande wave-enemies dood zijn
         if (_totalWaveEnemies > 0 && _totalWaveEnemies < int.MaxValue
@@ -134,6 +162,9 @@ public class WaveManager : MonoBehaviour
 
         if (audioSource == null)
             audioSource = GetComponent<AudioSource>();
+
+        PrerollNextWaveDirection();
+        // Geen OnBreakStarted() hier — power-ups spawnen pas na wave 1 (vanuit BeginBreak)
     }
 
     private void Update()
@@ -165,7 +196,7 @@ public class WaveManager : MonoBehaviour
         }
         else
         {
-            progressUI?.HideBreakCountdown();
+            progressUI?.ShowBreakCountdown(TimeRemaining, isFirstWave: true);
         }
 
         if (TimeRemaining <= 0f)
@@ -174,6 +205,14 @@ public class WaveManager : MonoBehaviour
                 BeginWave();
             else
                 BeginBreak();
+        }
+
+        // Mist-zuil tonen als de volgende wave nadert
+        if (IsBreak && CurrentWave > 0 && mistPillar != null && !_pillarShownThisBreak
+            && TimeRemaining <= pillarShowBeforeWave)
+        {
+            _pillarShownThisBreak = true;
+            mistPillar.TryShow(NextWaveHintPosition);
         }
 
         // Scouts tijdens pauze
@@ -199,8 +238,9 @@ public class WaveManager : MonoBehaviour
 
         CurrentWaveType = DetermineWaveType();
 
-        // Bepaal spawn richting
-        CurrentWaveSpawnDirection = GetWaveSpawnDirection();
+        // Bepaal spawn richting (gebruik prerolled richting als beschikbaar)
+        CurrentWaveSpawnDirection = _hasPrerolledDirection ? _prerolledSpawnDirection : GetWaveSpawnDirection();
+        _hasPrerolledDirection = false;
 
         float diffScale = DifficultySettings.AggressionScaleMultiplier;
         AggressionLevel = Mathf.Clamp01((CurrentWave - 1) * aggressionPerWave * diffScale);
@@ -222,6 +262,8 @@ public class WaveManager : MonoBehaviour
         if (tooltipUI != null && CurrentWaveType != WaveType.Normal)
             tooltipUI.ShowTooltip(CurrentWaveType);
 
+        mistPillar?.Hide();
+
         // Fog dichter tijdens wave
         VolumetricMistController.Instance?.SetBreakMode(false);
 
@@ -233,12 +275,32 @@ public class WaveManager : MonoBehaviour
         float missedFraction = maxClearPenalty > 0f
             ? _pendingPenalty / maxClearPenalty
             : 0f;
-        MapController.Instance?.UpdateForWave(CurrentWave, missedFraction);
+        float powerUpModifier = PowerUpSpawner.Instance != null ? PowerUpSpawner.Instance.PickupFraction : 1f;
+        PowerUpSpawner.Instance?.OnWaveStarted();
+        MapController.Instance?.UpdateForWave(CurrentWave, missedFraction, powerUpModifier);
+        if (powerUpModifier < 0.99f)
+            progressUI?.ShowPowerUpFailText(powerUpModifier);
 
         spawner?.OnWaveStarted(CurrentWave, AggressionLevel, maxEnemies, spawnInterval,
                                 CurrentWaveType, enemyHealthMultiplier, enemySpeedMultiplier, spawnCap,
                                 CurrentWaveSpawnDirection);
         waveUI?.ShowWaveMessage(CurrentWave, CurrentWaveType);
+    }
+
+    private void PrerollNextWaveDirection()
+    {
+        int nextWave = CurrentWave + 1;
+        if (useRandomDirection || waveSpawnPoints == null || waveSpawnPoints.Length == 0)
+        {
+            float angle = Random.Range(0f, 360f);
+            _prerolledSpawnDirection = Quaternion.Euler(0f, angle, 0f) * Vector3.forward;
+        }
+        else
+        {
+            int index = (nextWave - 1) % waveSpawnPoints.Length;
+            _prerolledSpawnDirection = waveSpawnPoints[index].position;
+        }
+        _hasPrerolledDirection = true;
     }
 
     private Vector3 GetWaveSpawnDirection()
@@ -317,13 +379,24 @@ public class WaveManager : MonoBehaviour
         TimeRemaining = 0f;
     }
 
+    public void AddBreakTime(float seconds)
+    {
+        if (!IsBreak) return;
+        TimeRemaining += seconds;
+    }
+
     private void BeginBreak()
     {
         IsBreak = true;
+        _pillarShownThisBreak = false;
         float baseDur = CurrentWave == 1 ? firstBreakDuration : breakDuration;
         TimeRemaining = baseDur * DifficultySettings.BreakDurationMultiplier;
         scoutTimer = scoutSpawnInterval * 0.5f;
         spawner?.OnWaveBreak();
+        PackLeaderManager.Instance?.NotifyWaveEnded();
+
+        PrerollNextWaveDirection();
+        PowerUpSpawner.Instance?.OnBreakStarted(NextWaveHintPosition);
 
         // Fog dunner tijdens break
         VolumetricMistController.Instance?.SetBreakMode(true);

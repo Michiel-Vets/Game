@@ -4,20 +4,49 @@ using UnityEngine.UI;
 
 public class WaveProgressUI : MonoBehaviour
 {
+    public static WaveProgressUI Instance { get; private set; }
+
     [Header("Wave Progress Bar")]
     [SerializeField] private Image progressFill;
     [SerializeField] private GameObject progressContainer;
 
     [Header("Break Countdown")]
-    [Tooltip("Optioneel TMP_Text voor de afteltimer tijdens een break.")]
     [SerializeField] private TMP_Text breakCountdownText;
     [SerializeField] private GameObject breakCountdownContainer;
+
+    [Header("Power-up Count")]
+    [SerializeField] private TMP_Text powerUpCountText;
+    [SerializeField] private GameObject powerUpCountContainer;
+
+    [Header("Power-up Fail")]
+    [SerializeField] private TMP_Text powerUpFailText;
+    [SerializeField] private GameObject powerUpFailContainer;
+    [SerializeField] private float powerUpFailDisplayDuration = 5f;
+
+    private float _failTextTimer;
+
+    private void Awake()
+    {
+        Instance = this;
+    }
 
     private void Start()
     {
         if (progressContainer != null)
             progressContainer.SetActive(false);
         SetBreakCountdownVisible(false);
+        SetActive(powerUpCountContainer, powerUpCountText, false);
+        SetActive(powerUpFailContainer,  powerUpFailText,  false);
+    }
+
+    private void Update()
+    {
+        if (_failTextTimer > 0f)
+        {
+            _failTextTimer -= Time.deltaTime;
+            if (_failTextTimer <= 0f)
+                SetActive(powerUpFailContainer, powerUpFailText, false);
+        }
     }
 
     // ── Wave progress ─────────────────────────────────────────────────────────
@@ -42,13 +71,16 @@ public class WaveProgressUI : MonoBehaviour
 
     // ── Break countdown ───────────────────────────────────────────────────────
 
-    public void ShowBreakCountdown(float secondsRemaining)
+    public void ShowBreakCountdown(float secondsRemaining, bool isFirstWave = false)
     {
         SetBreakCountdownVisible(true);
         if (breakCountdownText != null)
         {
             int s = Mathf.CeilToInt(secondsRemaining);
-            breakCountdownText.text = s > 0 ? $"Volgende wave over {s}s" : "Wave begint...";
+            if (isFirstWave)
+                breakCountdownText.text = s > 0 ? $"Spel begint in {s}s" : "Wave begint...";
+            else
+                breakCountdownText.text = s > 0 ? $"Volgende wave over {s}s" : "Wave begint...";
         }
     }
 
@@ -63,5 +95,42 @@ public class WaveProgressUI : MonoBehaviour
                         : breakCountdownText != null ? breakCountdownText.gameObject
                         : null;
         if (root != null) root.SetActive(visible);
+    }
+
+    // ── Power-up count ────────────────────────────────────────────────────────
+
+    public void ShowPowerUpCount(int collected, int total)
+    {
+        SetActive(powerUpCountContainer, powerUpCountText, true);
+        if (powerUpCountText != null)
+            powerUpCountText.text = $"{collected}/{total} power-ups";
+    }
+
+    public void HidePowerUpCount()
+    {
+        SetActive(powerUpCountContainer, powerUpCountText, false);
+    }
+
+    // ── Power-up fail text ────────────────────────────────────────────────────
+
+    public void ShowPowerUpFailText(float growthModifier)
+    {
+        string msg = growthModifier < 0.01f
+            ? "Geen power-ups gepakt!\nDe map groeit niet."
+            : $"Slechts {Mathf.RoundToInt(growthModifier * 100f)}% power-ups gepakt!\nDe map groeit minder.";
+
+        if (powerUpFailText != null) powerUpFailText.text = msg;
+        SetActive(powerUpFailContainer, powerUpFailText, true);
+        _failTextTimer = powerUpFailDisplayDuration;
+    }
+
+    // ── Utility ───────────────────────────────────────────────────────────────
+
+    private static void SetActive(GameObject container, TMP_Text text, bool active)
+    {
+        if (container != null)
+            container.SetActive(active);
+        else if (text != null)
+            text.gameObject.SetActive(active);
     }
 }

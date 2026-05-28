@@ -153,10 +153,12 @@ MonoBehaviour:
   upwardKnockbackForce: 2
   fleeSpeed: 8
   fleeDuration: 2.5
+  leaderKillFleeDuration: 3
   weakenedSpeed: 1.5
   flashlightKillTime: 0.2
   healTime: 5
   partialHealTimeMultiplier: 2.5
+  healSpeedPerWave: 0.08
   beamEvasionStrength: 6
   beamEvasionChance: 0.85
   speedMultiplierMin: 0.4
@@ -167,8 +169,8 @@ MonoBehaviour:
   lungeDistanceMultiplierMax: 1.8
   lungeSpeedMultiplierMin: 0.5
   lungeSpeedMultiplierMax: 2.2
-  scaleAtMinAggression: 2.8
-  scaleAtMaxAggression: 0.35
+  scaleAtMinAggression: 1.5
+  scaleAtMaxAggression: 0.8
   crowdCheckInterval: 0.7
   crowdSpreadRadius: 8
   maxNearbyAttackersBeforeSpread: 5
@@ -192,6 +194,7 @@ MonoBehaviour:
   enemyVisibilityDistance: 30
   materializationRange: 10
   materializationDuration: 2
+  mistEntryVisibilityRange: 10
   maxRetreatDuration: 7
   minRetreatDuration: 1.5
   retreatSpeed: 9

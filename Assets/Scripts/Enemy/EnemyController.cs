@@ -129,6 +129,7 @@ public class EnemyController : MonoBehaviour
     [Header("Fleeing")]
     [SerializeField] private float fleeSpeed = 8f;
     [SerializeField] private float fleeDuration = 2.5f;
+    [SerializeField] private float leaderKillFleeDuration = 3f;
 
     [Header("Weakened")]
     [SerializeField] private float weakenedSpeed = 1.5f;
@@ -137,6 +138,8 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private float flashlightKillTime = 2f;
     [SerializeField] private float healTime = 5f;
     [SerializeField] private float partialHealTimeMultiplier = 2.5f;
+    [Tooltip("Hoe veel sneller geesten healen per wave (0.08 = ~70% sneller op wave 10).")]
+    [SerializeField] private float healSpeedPerWave = 0.08f;
 
     [Header("Beam Evasion")]
     [SerializeField] private float beamEvasionStrength = 6f;
@@ -186,6 +189,10 @@ public class EnemyController : MonoBehaviour
     [Header("Attack Materialization")]
     [SerializeField] private float materializationRange = 8f;
     [SerializeField] private float materializationDuration = 2f;
+
+    [Header("Mist Entry")]
+    [Tooltip("Afstand tot de kaartrand waarbinnen de geest zichtbaar wordt en de mistwand opent (units).")]
+    [SerializeField] private float mistEntryVisibilityRange = 10f;
 
     [Header("Wave Retreat")]
     [SerializeField] private float maxRetreatDuration = 7f;
@@ -277,6 +284,17 @@ public class EnemyController : MonoBehaviour
     private bool _hasPassedMistWall = false;
     private bool _isMistEntryDisplacer = false;
 
+    // Pack Leader
+    public bool IsPackLeader { get; private set; }
+    private float _leaderHealSlowMultiplier = 1f;
+    private bool _isLeaderFlee; // tijdelijke vlucht na leider-kill (keert terug)
+    private bool _isFlyingOut;  // vlucht buiten de kaart (despawn als buiten de rand)
+
+    // Ghost memory — succesvol healen vergroot ontwijkkans permanent
+    private int   _evadeLearnCount     = 0;
+    private int   _maxEvadeLearnCount  = 3;
+    private float _evadeLearnIncrement = 0.10f;
+
     // ── Unity lifecycle ──────────────────────────────────────────────────────
 
     private void Awake()
@@ -323,8 +341,8 @@ public class EnemyController : MonoBehaviour
 
         _baseScale = transform.localScale;
         state = BehaviourState.MistEntry; // begin altijd met door de mistwand laden
-        VolumetricMistController.Register(transform);
-        _isMistEntryDisplacer = true;
+        // Registreer pas als displacer (mist-opening) als de geest dicht bij de wand is.
+        _isMistEntryDisplacer = false;
     }
 
     private void OnEnable()
@@ -424,6 +442,8 @@ public class EnemyController : MonoBehaviour
         transform.localScale *= 1.5f;
         originalScale = transform.localScale;
         ghostClothSetup?.NotifyScaleChanged();
+        _maxEvadeLearnCount  = 5;
+        _evadeLearnIncrement = 0.18f;
     }
 
     public void SetScoutMode()
@@ -470,6 +490,81 @@ public class EnemyController : MonoBehaviour
         transform.localScale *= 0.8f;
         originalScale = transform.localScale;
         ghostClothSetup?.NotifyScaleChanged();
+        _maxEvadeLearnCount  = 2;
+        _evadeLearnIncrement = 0.05f;
+    }
+
+    public void SetPackLeaderMode()
+    {
+        IsPackLeader = true;
+        moveSpeed *= 1.1f;
+        flashlightKillTime *= 1.5f;
+        transform.localScale *= 1.4f;
+        originalScale = transform.localScale;
+        // Rood-oranje tint zodat de leider duidelijk herkenbaar is
+        ghostClothSetup?.SetPackLeaderColor(new Color(1f, 0.25f, 0.05f));
+        ghostClothSetup?.NotifyScaleChanged();
+    }
+
+    public void ApplyLeaderKilledDebuff(float speedDebuff, float healSlowFactor)
+    {
+        if (IsPackLeader) return;
+        moveSpeed *= (1f - speedDebuff);
+        _leaderHealSlowMultiplier = healSlowFactor;
+    }
+
+    public void ApplyLeaderSurvivedBuff(float speedBuff)
+    {
+        if (IsPackLeader) return;
+        moveSpeed *= (1f + speedBuff);
+    }
+
+    public static void BroadcastLeaderKilled(float speedDebuff, float healSlowFactor)
+    {
+        foreach (var e in _allActive)
+        {
+            e.ApplyLeaderKilledDebuff(speedDebuff, healSlowFactor);
+            e.BeginLeaderFleeResponse();
+        }
+    }
+
+    /// <summary>Roep aan vanuit EnemySpawner om de geest dynamisch naar buiten te laten vliegen.</summary>
+    public void BeginFlyOut()
+    {
+        if (state == BehaviourState.Dying) return;
+
+        _isFlyingOut = true;
+        state = BehaviourState.Fleeing;
+        stateTimer = 15f; // maximale fallback
+
+        // Vlieg recht naar buiten (weg van midden map)
+        Vector3 center = MapController.Instance != null
+            ? MapController.Instance.PlatformCenter
+            : Vector3.zero;
+        Vector3 awayDir = transform.position - center;
+        awayDir.y = 0f;
+        fleeDirection = awayDir.sqrMagnitude > 0.01f ? awayDir.normalized : transform.forward;
+    }
+
+    private void BeginLeaderFleeResponse()
+    {
+        if (IsPackLeader) return;
+        if (state == BehaviourState.Dying || state == BehaviourState.Fleeing) return;
+
+        _isLeaderFlee = true;
+        state = BehaviourState.Fleeing;
+        stateTimer = leaderKillFleeDuration;
+
+        if (playerTarget != null)
+            fleeDirection = (transform.position - playerTarget.position).normalized;
+        else
+            fleeDirection = Quaternion.Euler(0f, Random.Range(0f, 360f), 0f) * Vector3.forward;
+    }
+
+    public static void BroadcastLeaderSurvived(float speedBuff)
+    {
+        foreach (var e in _allActive)
+            e.ApplyLeaderSurvivedBuff(speedBuff);
     }
 
     public void ApplyMultipliers(float healthMult, float speedMult, bool isVisible = false)
@@ -579,17 +674,29 @@ public class EnemyController : MonoBehaviour
         else if (state == BehaviourState.Weakened && flashlightDamage > 0f)
         {
             float spectrumHealMultiplier = Mathf.Lerp(3.5f, 0.5f, (aggressionSpectrum + 1f) * 0.5f);
-            flashlightDamage -= dt / (healTime * partialHealTimeMultiplier * spectrumHealMultiplier);
+            int currentWave = WaveManager.Instance != null ? WaveManager.Instance.CurrentWave : 1;
+            float waveHealBonus = 1f / (1f + (currentWave - 1) * healSpeedPerWave);
+            flashlightDamage -= dt / (healTime * partialHealTimeMultiplier * spectrumHealMultiplier * waveHealBonus * _leaderHealSlowMultiplier);
             flashlightDamage = Mathf.Max(0f, flashlightDamage);
 
             if (flashlightDamage <= 0f)
             {
+                LearnEvasion();
                 float dist = playerTarget != null
                     ? Vector3.Distance(transform.position, playerTarget.position)
                     : 0f;
                 TransitionToAttack(dist);
             }
         }
+    }
+
+    private void LearnEvasion()
+    {
+        if (_evadeLearnCount >= _maxEvadeLearnCount) return;
+        int wave = WaveManager.Instance != null ? WaveManager.Instance.CurrentWave : 1;
+        float waveScale = 1f + (wave - 1) * 0.05f;
+        beamEvasionChance = Mathf.Clamp01(beamEvasionChance + _evadeLearnIncrement * waveScale);
+        _evadeLearnCount++;
     }
 
     private void EnterWeakened()
@@ -600,6 +707,8 @@ public class EnemyController : MonoBehaviour
 
     private void BeginDying()
     {
+        if (IsPackLeader)
+            PackLeaderManager.Instance?.NotifyLeaderKilled();
         state = BehaviourState.Dying;
         deathTimer = deathRiseDuration;
         rb.linearVelocity = Vector3.zero;
@@ -633,6 +742,15 @@ public class EnemyController : MonoBehaviour
 
     private void UpdateVisibility()
     {
+        // Geesten die de mistwand nog niet zijn doorgekomen blijven volledig onzichtbaar.
+        // De mist-opening (displacer) is wél actief zodat de wand visueel openklaart.
+        if (state == BehaviourState.MistEntry)
+        {
+            _currentVisibility = 0f;
+            ghostClothSetup?.ForceInvisible();
+            return;
+        }
+
         float damageOpacity = Mathf.Clamp01(flashlightDamage + _materializationProgress);
 
         float naturalBase = state == BehaviourState.Retreat ? 0f : _materializationProgress;
@@ -734,7 +852,36 @@ public class EnemyController : MonoBehaviour
         if (state == BehaviourState.Fleeing)
         {
             stateTimer -= dt;
-            if (stateTimer <= 0f) BeginDying();
+
+            if (_isFlyingOut && MapController.Instance != null)
+            {
+                Vector3 center = MapController.Instance.PlatformCenter;
+                float flatDist = new Vector2(
+                    transform.position.x - center.x,
+                    transform.position.z - center.z).magnitude;
+                if (flatDist >= MapController.Instance.CurrentRadius + 5f)
+                {
+                    Destroy(gameObject);
+                    return;
+                }
+            }
+
+            if (stateTimer <= 0f)
+            {
+                if (_isFlyingOut)
+                {
+                    Destroy(gameObject);
+                }
+                else if (_isLeaderFlee)
+                {
+                    _isLeaderFlee = false;
+                    TransitionToAttack(distToPlayer);
+                }
+                else
+                {
+                    BeginDying();
+                }
+            }
             return;
         }
 
@@ -755,6 +902,13 @@ public class EnemyController : MonoBehaviour
 
         if (state == BehaviourState.MistEntry)
         {
+            // Registreer als displacer (mist-opening) zodra de geest dicht bij de wand is
+            if (!_isMistEntryDisplacer && IsNearMapWall(mistEntryVisibilityRange))
+            {
+                VolumetricMistController.Register(transform);
+                _isMistEntryDisplacer = true;
+            }
+
             if (IsInsideHardWall())
             {
                 _hasPassedMistWall = true;
@@ -1001,6 +1155,16 @@ public class EnemyController : MonoBehaviour
             transform.position.x - center.x,
             transform.position.z - center.z).magnitude;
         return flatDist <= hardWallRadius;
+    }
+
+    private bool IsNearMapWall(float range)
+    {
+        if (MapController.Instance == null) return true;
+        Vector3 center = MapController.Instance.PlatformCenter;
+        float flatDist = new Vector2(
+            transform.position.x - center.x,
+            transform.position.z - center.z).magnitude;
+        return Mathf.Abs(flatDist - MapController.Instance.CurrentRadius) <= range;
     }
 
     private Vector3 GetMistEntryDirection()

@@ -38,12 +38,17 @@ public class FlashlightController : MonoBehaviour
     [SerializeField] private float strongBatteryMultiplier = 2.0f;
     [SerializeField] private float strongEffectMultiplier = 1.8f;
 
+    [Header("Combo Boost")]
+    [SerializeField] private float comboIntensityMultiplier = 1.6f;
+    [SerializeField] private float comboSpotAngleMultiplier = 1.4f;
+
     public bool IsOn => _mode != FlashlightMode.Off;
     public FlashlightMode CurrentMode => _mode;
 
     private FlashlightMode _mode = FlashlightMode.Off;
     private float _baseLightRange;
     private float _baseSpotAngle;
+    private float _baseIntensity;
     private HashSet<EnemyController> _litEnemies = new HashSet<EnemyController>();
 
     private static readonly int PropPos      = Shader.PropertyToID("_FlashlightWorldPos");
@@ -58,6 +63,7 @@ public class FlashlightController : MonoBehaviour
             flashlight = GetComponent<Light>();
         _baseLightRange = flashlight != null ? flashlight.range : maxDistance;
         _baseSpotAngle  = flashlight != null ? flashlight.spotAngle : 30f;
+        _baseIntensity  = flashlight != null ? flashlight.intensity : 1f;
     }
 
     private void Start()
@@ -72,9 +78,13 @@ public class FlashlightController : MonoBehaviour
         {
             if (batteryController != null)
             {
-                batteryController.DrainBattery(Time.deltaTime * GetDrainMultiplier());
+                float drainMult = GetDrainMultiplier();
+                if (ComboSystem.Instance != null && ComboSystem.Instance.IsComboActive)
+                    drainMult *= ComboSystem.Instance.OverchargedDrainMultiplier;
+                batteryController.DrainBattery(Time.deltaTime * drainMult);
 
-                if (!batteryController.HasBattery)
+                bool overused = ComboSystem.Instance != null && ComboSystem.Instance.IsOverused;
+                if (!batteryController.HasBattery && !overused)
                 {
                     SetMode(FlashlightMode.Off);
                     return;
@@ -95,6 +105,15 @@ public class FlashlightController : MonoBehaviour
         if (next != FlashlightMode.Off && !hasBattery)
             next = FlashlightMode.Off;
         SetMode(next);
+    }
+
+    public void SetComboBoosted(bool boosted)
+    {
+        if (flashlight != null)
+        {
+            flashlight.intensity  = _baseIntensity  * (boosted ? comboIntensityMultiplier : 1f);
+            flashlight.spotAngle  = _baseSpotAngle  * (boosted ? comboSpotAngleMultiplier : 1f);
+        }
     }
 
     // Backwards-compat alias (werd aangeroepen vanuit PlayerController)
@@ -174,6 +193,12 @@ public class FlashlightController : MonoBehaviour
 
         bool  spotOnly       = _mode == FlashlightMode.Weak || !damageEnemies;
         float effectMult     = _mode == FlashlightMode.Strong ? strongEffectMultiplier : 1f;
+        // Combo / overused versterken de zaklamp-damage
+        if (ComboSystem.Instance != null)
+        {
+            effectMult *= ComboSystem.Instance.ComboDamageMultiplier;
+            effectMult *= ComboSystem.Instance.OverusedDamageMultiplier;
+        }
         float currentMaxDist = GetCurrentMaxDistance();
         float currentHitRad  = GetCurrentHitRadius();
 

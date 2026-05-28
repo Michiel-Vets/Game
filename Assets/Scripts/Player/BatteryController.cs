@@ -14,6 +14,13 @@ public class BatteryController : MonoBehaviour
     [SerializeField] private Color fullColor = new Color(1f, 1f, 0f, 1f);
     [SerializeField] private Color lowColor = new Color(0.9f, 0.2f, 0.2f, 1f);
 
+    [Header("Combo")]
+    [SerializeField] private Color comboColor   = new Color(0.2f, 0.5f, 1f, 1f);
+    [SerializeField] private Color overusedColor = new Color(1f, 0.2f, 0f, 1f);
+
+    private bool _comboFlashing;
+    private bool _overused;
+
     public float MaxBattery => maxBattery;
     public float CurrentBattery => currentBattery;
     public bool HasBattery => currentBattery > 0f;
@@ -60,6 +67,40 @@ public class BatteryController : MonoBehaviour
         UpdateBatteryVisuals();
     }
 
+    public void EmptyBattery()
+    {
+        currentBattery = 0f;
+        UpdateBatteryVisuals();
+    }
+
+    public void StartComboFlash()
+    {
+        _comboFlashing = true;
+        if (batteryFillImage != null)
+            batteryFillImage.color = comboColor;
+    }
+
+    public void StopComboFlash()
+    {
+        _comboFlashing = false;
+        if (!_overused) UpdateBatteryVisuals();
+    }
+
+    public void TickComboFlash(float deltaTime) { }
+
+    public void StartOverused()
+    {
+        _overused = true;
+        if (batteryFillImage != null)
+            batteryFillImage.color = overusedColor;
+    }
+
+    public void StopOverused()
+    {
+        _overused = false;
+        UpdateBatteryVisuals();
+    }
+
     private void UpdateBatteryVisuals()
     {
         if (batteryFillTransform != null)
@@ -69,7 +110,7 @@ public class BatteryController : MonoBehaviour
             batteryFillTransform.offsetMax = offsetMax;
         }
 
-        if (batteryFillImage != null)
+        if (batteryFillImage != null && !_comboFlashing)
             batteryFillImage.color = Color.Lerp(lowColor, fullColor, BatteryFraction);
     }
 }

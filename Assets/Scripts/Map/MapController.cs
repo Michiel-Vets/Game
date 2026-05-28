@@ -117,7 +117,7 @@ public class MapController : MonoBehaviour
     /// missedFraction = 0  → wave gecleared, map groeit normaal.
     /// missedFraction = 1  → wave volledig gemist, map krimpt maximaal.
     /// </summary>
-    public void UpdateForWave(int waveNumber, float missedFraction = 0f)
+    public void UpdateForWave(int waveNumber, float missedFraction = 0f, float powerUpGrowthModifier = 1f)
     {
         GrowthRingInnerRadius = _targetRadius; // sla op vóór de update
 
@@ -128,10 +128,11 @@ public class MapController : MonoBehaviour
         }
         else
         {
-            _targetRadius = Mathf.Clamp(
+            float fullTarget = Mathf.Clamp(
                 minRadius + (waveNumber - 1) * radiusGrowthPerWave,
                 minRadius,
                 maxRadius);
+            _targetRadius = Mathf.Lerp(CurrentRadius, fullTarget, powerUpGrowthModifier);
         }
 
         GrowthRingOuterRadius = _targetRadius; // sla op na de update

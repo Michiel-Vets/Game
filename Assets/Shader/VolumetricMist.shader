@@ -35,6 +35,8 @@ Shader "Custom/VolumetricFog"
         _MapWallDensity("Map wall density", Range(0, 20)) = 6
         _MapWallGhostRadius("Ghost opening radius", Float) = 8
         _MapWallInset("Map wall inset (m)", Float) = 5
+        _MapWallHeightReduction("Map wall height reduction (m)", Float) = 1
+        _MistSwirlStrength("Mist swirl strength", Range(0, 3)) = 1
     }
 
     SubShader
@@ -79,6 +81,8 @@ Shader "Custom/VolumetricFog"
                 float  _MapWallDensity;
                 float  _MapWallGhostRadius;
                 float  _MapWallInset;
+                float  _MapWallHeightReduction;
+                float  _MistSwirlStrength;
             CBUFFER_END
 
             TEXTURE3D(_FogNoise);
@@ -90,11 +94,22 @@ Shader "Custom/VolumetricFog"
             float _MistTrailOriginX;
             float _MistTrailOriginZ;
 
+            TEXTURE2D(_MistSwirlMap);
+            SAMPLER(sampler_MistSwirlMap);
+
             float3 _FlashlightWorldPos;
             float3 _FlashlightWorldDir;
             float  _FlashlightCosHalfAngle;
             float  _FlashlightRange;
             float  _FlashlightEnabled;
+
+            // Power-up beams — gezet door PowerUpSpawner elke break
+            float4 _PowerUpBeamPositions[4];
+            float  _PowerUpBeamCount;
+            float  _PowerUpBeamCosAngle;
+            float  _PowerUpBeamRange;
+            float4 _PowerUpBeamColor;
+            float  _PowerUpBeamStrength;
 
             // Geest-posities — gezet door VolumetricMistController elke frame
             float4 _DisplacerPositions[16];
@@ -119,6 +134,26 @@ Shader "Custom/VolumetricFog"
                 float angleT = saturate((cosA - _FlashlightCosHalfAngle) / max(1.0 - _FlashlightCosHalfAngle, 0.001));
                 float distT  = 1.0 - saturate(dist / _FlashlightRange);
                 return angleT * angleT * distT * distT;
+            }
+
+            float powerup_beam_contribution(float3 worldPos)
+            {
+                if (_PowerUpBeamCount < 0.5) return 0; // snelle uitgang als er geen beams zijn
+                float total = 0;
+                int count = (int)(_PowerUpBeamCount + 0.5);
+                float3 upDir = float3(0, 1, 0);
+                for (int i = 0; i < count && i < 4; i++)
+                {
+                    float3 toPoint = worldPos - _PowerUpBeamPositions[i].xyz;
+                    float dist = length(toPoint);
+                    if (dist < 0.01 || dist > _PowerUpBeamRange) continue;
+                    float cosA = dot(toPoint / dist, upDir);
+                    if (cosA < _PowerUpBeamCosAngle) continue;
+                    float angleT = saturate((cosA - _PowerUpBeamCosAngle) / max(1.0 - _PowerUpBeamCosAngle, 0.001));
+                    float distT  = 1.0 - saturate(dist / _PowerUpBeamRange);
+                    total += angleT * angleT * distT * distT;
+                }
+                return saturate(total);
             }
 
             bool within_ground_bounds(float3 worldPos)
@@ -149,13 +184,19 @@ Shader "Custom/VolumetricFog"
     float noiseFade = saturate(1.0 - distFromPlayer / max(_VisibilityDistance, 0.001));
     if (noiseFade <= 0.001) return hazeDensity;
 
-    float4 noise   = _FogNoise.SampleLevel(sampler_FogNoise, worldPos * 0.01 * _NoiseTiling, 0);
-    float  density = saturate(dot(noise, noise) - _DensityThreshold) * _DensityMultiplier * heightFalloff * noiseFade;
-
     float2 trailUV = float2(
         (worldPos.x - _MistTrailOriginX) / _MistTrailWorldSize,
         (worldPos.z - _MistTrailOriginZ) / _MistTrailWorldSize
     );
+
+    // Werveling: gebruik opgeslagen turbulentievectoren om de noise-UV te vervormen
+    float2 swirlVec = SAMPLE_TEXTURE2D_LOD(_MistSwirlMap, sampler_MistSwirlMap, trailUV, 0).rg;
+    float swirlAnim = sin(_Time.y * 1.5 + worldPos.x * 0.31 + worldPos.z * 0.29);
+    float3 noiseSamplePos = worldPos + float3(swirlVec.x, 0, swirlVec.y) * swirlAnim * _MistSwirlStrength * 2.0;
+
+    float4 noise   = _FogNoise.SampleLevel(sampler_FogNoise, noiseSamplePos * 0.01 * _NoiseTiling, 0);
+    float  density = saturate(dot(noise, noise) - _DensityThreshold) * _DensityMultiplier * heightFalloff * noiseFade;
+
     float trail = SAMPLE_TEXTURE2D_LOD(_MistTrailMap, sampler_MistTrailMap, trailUV, 0).r;
     density *= trail;
 
@@ -200,36 +241,17 @@ float get_wall_density(float3 worldPos, float distFromPlayer, float effectiveVis
                 if (distFromCenter <= wallStart) return 0;
 
                 float height = worldPos.y - _FloorY;
-                if (height < 0 || height > _FogHeight) return 0;
+                float mapWallFogHeight = _FogHeight - _MapWallHeightReduction;
+                if (height < 0 || height > mapWallFogHeight) return 0;
 
-                float heightT = saturate(height / _FogHeight);
+                float heightT = saturate(height / mapWallFogHeight);
                 float wallHeightFactor = lerp(0.6, 1.0, heightT);
 
-                float density;
                 if (distFromCenter >= _MapRadius)
-                    density = _MapWallDensity * 8.0 * wallHeightFactor;
-                else
-                {
-                    float t = saturate((distFromCenter - wallStart) / max(_MapWallInset, 0.001));
-                    density = t * t * t * _MapWallDensity * wallHeightFactor;
-                }
+                    return _MapWallDensity * 8.0 * wallHeightFactor;
 
-                // Knip een gat in de muur voor elke geest in MistEntry-state
-                int ghostCount = (int)_DisplacerCount;
-                for (int gi = 0; gi < ghostCount && gi < 16; gi++)
-                {
-                    float3 ghostPos = _DisplacerPositions[gi].xyz;
-                    float  dx       = worldPos.x - ghostPos.x;
-                    float  dz       = worldPos.z - ghostPos.z;
-                    float  xzDist   = sqrt(dx * dx + dz * dz);
-                    if (xzDist < _MapWallGhostRadius)
-                    {
-                        float openT = 1.0 - saturate(xzDist / max(_MapWallGhostRadius, 0.001));
-                        density    *= (1.0 - openT * openT * openT);
-                    }
-                }
-
-                return density;
+                float t = saturate((distFromCenter - wallStart) / max(_MapWallInset, 0.001));
+                return t * t * t * _MapWallDensity * wallHeightFactor;
             }
 
             // ── Fragment ──────────────────────────────────────────────────────
@@ -284,6 +306,51 @@ float get_wall_density(float3 worldPos, float distFromPlayer, float effectiveVis
                     float fogDensity     = get_fog_density(rayPos, distFromPlayer);
                     float wallDensity    = get_wall_density(rayPos, distFromPlayer, effectiveVis);
                     float mapWallDensity = get_map_wall_density(rayPos, distFromCenter);
+
+                    // Ghost opening: geesten bij de kaartrand openen een tunnel door de mistwanden.
+                    // - Positie-gebaseerd: ruimt de kaartrand-mist op rondom de geest (XZ-cilinder).
+                    // - Richting-gebaseerd: ruimt ook de persoonlijke mistwand op langs de kijkrichting
+                    //   naar de geest, zodat de speler de geest al ziet aankomen door de mist.
+                    float ghostMapOpen  = 1.0; // voor mapWallDensity
+                    float ghostWallOpen = 1.0; // voor wallDensity (persoonlijke mist)
+                    int ghostCount = (int)_DisplacerCount;
+                    for (int gi = 0; gi < ghostCount && gi < 16; gi++)
+                    {
+                        float3 ghostPos = _DisplacerPositions[gi].xyz;
+
+                        // ── Positie-gebaseerd (XZ-cilinder) voor kaartrand-mist ──────────
+                        float gDx    = rayPos.x - ghostPos.x;
+                        float gDz    = rayPos.z - ghostPos.z;
+                        float xzDist = sqrt(gDx * gDx + gDz * gDz);
+                        if (xzDist < _MapWallGhostRadius)
+                        {
+                            float openT = 1.0 - saturate(xzDist / max(_MapWallGhostRadius, 0.001));
+                            ghostMapOpen = min(ghostMapOpen, 1.0 - openT * openT * openT);
+                        }
+
+                        // ── Richting-gebaseerd (cone) voor persoonlijke mistwand ──────────
+                        float2 toGhostXZ   = float2(ghostPos.x - _WorldSpaceCameraPos.x,
+                                                     ghostPos.z - _WorldSpaceCameraPos.z);
+                        float  ghostDistXZ = length(toGhostXZ);
+                        if (ghostDistXZ > 0.5)
+                        {
+                            float2 rayXZ      = normalize(float2(rayDir.x, rayDir.z));
+                            float2 toGhostDir = toGhostXZ / ghostDistXZ;
+                            float  cosA       = dot(rayXZ, toGhostDir);
+                            // hoekstraal van de cone = ghostRadius / afstand (in radialen)
+                            float  sinHalf    = saturate(_MapWallGhostRadius / ghostDistXZ);
+                            float  cosHalf    = sqrt(max(1.0 - sinHalf * sinHalf, 0.0));
+                            if (cosA > cosHalf)
+                            {
+                                float t = saturate((cosA - cosHalf) / max(1.0 - cosHalf, 0.001));
+                                ghostWallOpen = min(ghostWallOpen, 1.0 - t * t * t);
+                            }
+                        }
+                    }
+                    fogDensity     *= ghostMapOpen;
+                    wallDensity    *= ghostWallOpen;
+                    mapWallDensity *= ghostMapOpen;
+
                     float totalDensity   = fogDensity + wallDensity + mapWallDensity;
 
                     if (totalDensity > 0)
@@ -323,6 +390,15 @@ float get_wall_density(float3 worldPos, float distFromPlayer, float effectiveVis
                         float flashContrib = flashlight_contribution(rayPos);
                         if (flashContrib > 0.001)
                             fogAccum += _FlashlightBeamColor.rgb * flashContrib * fogDensity * _StepSize * _FlashlightScatterStrength * transmittance;
+
+                        // Power-up beam scattering (zichtbaar door reguliere fog én mistwand)
+                        float puContrib = powerup_beam_contribution(rayPos);
+                        if (puContrib > 0.001)
+                        {
+                            float scatterDensity = fogDensity + mapWallDensity * 0.2;
+                            if (scatterDensity > 0.001)
+                                fogAccum += _PowerUpBeamColor.rgb * puContrib * scatterDensity * _StepSize * _PowerUpBeamStrength * transmittance;
+                        }
 
                         transmittance *= exp(-totalDensity * _StepSize);
                         if (transmittance < 0.005) break;

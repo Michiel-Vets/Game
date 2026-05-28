@@ -114,6 +114,7 @@ public class EnemySpawner : MonoBehaviour
                 SpawnSingleEnemy(currentSpawnDirection);
             _remainingToSpawn = 0;
             isActive = false;
+            AssignPackLeader();
         }
     }
 
@@ -188,6 +189,26 @@ public class EnemySpawner : MonoBehaviour
             if (_groupTimer <= 0f)
                 SpawnGroup();
         }
+    }
+
+    // ── Pack Leader ───────────────────────────────────────────────────────────
+
+    private void AssignPackLeader()
+    {
+        if (PackLeaderManager.Instance == null) return;
+
+        // Kies een willekeurige normale enemy (geen scout, geen elite) als leider.
+        // Als er geen normale enemies zijn, pak gewoon de eerste.
+        var candidates = new System.Collections.Generic.List<EnemyController>();
+        foreach (var go in activeEnemies)
+        {
+            if (go == null) continue;
+            var ec = go.GetComponent<EnemyController>();
+            if (ec != null && !ec.IsPackLeader)
+                candidates.Add(ec);
+        }
+        if (candidates.Count == 0) return;
+        PackLeaderManager.Instance.AssignLeader(candidates[Random.Range(0, candidates.Count)]);
     }
 
     // ── Groepsspawn ───────────────────────────────────────────────────────────
@@ -374,7 +395,14 @@ public class EnemySpawner : MonoBehaviour
     private void CleanupAllEnemies()
     {
         foreach (var enemy in activeEnemies)
-            if (enemy != null) Destroy(enemy);
+        {
+            if (enemy == null) continue;
+            var ec = enemy.GetComponent<EnemyController>();
+            if (ec != null && isBreak)
+                ec.BeginFlyOut(); // break-geesten vliegen dynamisch weg
+            else
+                Destroy(enemy);
+        }
         activeEnemies.Clear();
     }
 
