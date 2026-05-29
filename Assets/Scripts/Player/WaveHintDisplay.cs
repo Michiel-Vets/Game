@@ -39,6 +39,15 @@ public class WaveHintDisplay : MonoBehaviour
         // Registreer in Awake (niet Start): Awake loopt synchroon tijdens Instantiate,
         // zodat de beam altijd voor OnWaveStarted() staat als ze op hetzelfde frame vallen.
         PowerUpSpawner.Instance?.RegisterHintBeam(transform.position);
+
+        // Maak fog corridor aan van pijler naar midden
+        Vector3 center = MapController.Instance != null
+            ? MapController.Instance.PlatformCenter
+            : Vector3.zero;
+        var corridorGo = new GameObject("FogCorridor");
+        corridorGo.transform.SetParent(transform);
+        var corridor = corridorGo.AddComponent<FogCorridor>();
+        corridor.Activate(transform.position, center);
     }
 
     private void Update()

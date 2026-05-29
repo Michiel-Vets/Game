@@ -12,6 +12,9 @@ public class ScoutDropReward : MonoBehaviour
     [SerializeField] private float spawnYOffset = 0.3f;
 
     private bool _hasDropped;
+    private static bool _appQuitting;
+
+    private void OnApplicationQuit() => _appQuitting = true;
 
     public void Setup()
     {
@@ -25,7 +28,7 @@ public class ScoutDropReward : MonoBehaviour
 
     private void OnDestroy()
     {
-        if (_hasDropped || batteryPickupPrefab == null) return;
+        if (_hasDropped || batteryPickupPrefab == null || _appQuitting || !Application.isPlaying) return;
         if (Random.value > dropChance) return;
 
         _hasDropped = true;

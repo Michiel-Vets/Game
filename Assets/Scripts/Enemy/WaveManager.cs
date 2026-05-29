@@ -17,8 +17,8 @@ public class WaveManager : MonoBehaviour
     [SerializeField] private float waveDurationPerEnemy = 4f;
     [SerializeField] private float maxWaveDuration = 240f;
     [SerializeField] private float initialBreakDuration = 20f;   // Rust voor wave 1
-    [SerializeField] private float firstBreakDuration = 40f;     // Break na wave 1
-    [SerializeField] private float breakDuration = 90f;          // Overige breaks
+    [SerializeField] private float firstBreakDuration = 60f;     // Break na wave 1
+    [SerializeField] private float breakDuration = 150f;         // Overige breaks
 
     [Header("Enemy Count Scaling (Normal)")]
     [SerializeField] private int baseMaxEnemies = 6;
@@ -118,6 +118,22 @@ public class WaveManager : MonoBehaviour
         Instance = this;
     }
 
+    /// <summary>Aanroepen vanuit PowerUpSpawner zodra alle power-ups zijn opgepakt.</summary>
+    public void OnAllPowerUpsCollected()
+    {
+        if (!IsBreak) return;
+
+        // Lichtpijler tonen
+        if (mistPillar != null && !_pillarShownThisBreak)
+        {
+            _pillarShownThisBreak = true;
+            mistPillar.TryShow(NextWaveHintPosition);
+        }
+
+        // Wave begint 5 seconden later
+        TimeRemaining = Mathf.Min(TimeRemaining, 5f);
+    }
+
     // ── Kill / spawn tracking (aangeroepen vanuit EnemyController & EnemySpawner) ──
 
     /// <summary>Aanroepen zodra een wave-enemy gespawnd wordt (niet scouts).</summary>
@@ -205,14 +221,6 @@ public class WaveManager : MonoBehaviour
                 BeginWave();
             else
                 BeginBreak();
-        }
-
-        // Mist-zuil tonen als de volgende wave nadert
-        if (IsBreak && CurrentWave > 0 && mistPillar != null && !_pillarShownThisBreak
-            && TimeRemaining <= pillarShowBeforeWave)
-        {
-            _pillarShownThisBreak = true;
-            mistPillar.TryShow(NextWaveHintPosition);
         }
 
         // Scouts tijdens pauze

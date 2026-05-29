@@ -278,6 +278,7 @@ public class EnemyController : MonoBehaviour
     private Vector3 retreatDirection;
 
     private bool _isScoutMode = false;
+    private bool _isPowerUpCarrier = false;
     private bool _isAttackModeVisible = false;
     private Vector3 _baseScale; // basisschaal vóór alle mode- en aggression-scalings
 
@@ -456,6 +457,34 @@ public class EnemyController : MonoBehaviour
         originalScale = transform.localScale;
         ghostClothSetup?.SetScoutAppearance(true);
         ghostClothSetup?.NotifyScaleChanged();
+    }
+
+    public void SetPowerUpCarrierMode()
+    {
+        _isPowerUpCarrier = true;
+        _isScoutMode = true;
+        moveSpeed *= 0.55f;
+        retreatSpeed *= 0.6f;
+        lungeChance = 0f;
+        flashlightKillTime *= 0.4f;
+        transform.localScale *= 0.65f;
+        originalScale = transform.localScale;
+        ghostClothSetup?.SetScoutAppearance(true);
+        ghostClothSetup?.SetPowerUpCarrierLight();
+        ghostClothSetup?.NotifyScaleChanged();
+    }
+
+    /// <summary>
+    /// Aanroepen als de geest al binnen de kaart spawnt (sla MistEntry over,
+    /// activeer boundary-behoud zodat hij de fogmuur niet kan verlaten).
+    /// </summary>
+    public void SetSpawnedInsideMap()
+    {
+        _hasPassedMistWall = true;
+        // Zorg dat de geest niet in MistEntry blijft hangen;
+        // TransitionToAttack zet carriers meteen in Retreat (wandelen).
+        if (state == BehaviourState.MistEntry || state == BehaviourState.Inactive)
+            state = BehaviourState.Retreat;
     }
 
     public bool IsInAttackMode()
@@ -933,6 +962,11 @@ public class EnemyController : MonoBehaviour
 
         if (state == BehaviourState.Retreat)
         {
+            if (_isPowerUpCarrier && playerTarget != null && distToPlayer < 18f)
+            {
+                retreatDirection = (transform.position - playerTarget.position).normalized;
+                retreatTimer = Mathf.Max(retreatTimer, 2f);
+            }
             retreatTimer -= dt;
             if (retreatTimer <= 0f)
                 TransitionToAttack(distToPlayer);
@@ -1017,6 +1051,15 @@ public class EnemyController : MonoBehaviour
 
     private void TransitionToAttack(float distToPlayer)
     {
+        if (_isPowerUpCarrier)
+        {
+            float angle = Random.Range(0f, 360f);
+            retreatDirection = Quaternion.Euler(0f, angle, 0f) * Vector3.forward;
+            retreatTimer = Random.Range(3f, 6f);
+            state = BehaviourState.Retreat;
+            return;
+        }
+
         bool canIntercept = distToPlayer >= minInterceptDistance && distToPlayer <= interceptDistance;
 
         float wFlank = Mathf.Lerp(0.65f, 0.20f, waveAggressionLevel);

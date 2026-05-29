@@ -115,7 +115,38 @@ Shader "Custom/VolumetricFog"
             float4 _DisplacerPositions[16];
             float  _DisplacerCount;
 
-            // ── Helpers ──────────────────────────────────────────────────────
+            // Fog corridor (lichtpad van pijler naar midden)
+            float  _CorridorActive;
+            float4 _CorridorStartEndXZ; // xy = start XZ, zw = eind XZ
+            float  _CorridorHalfWidth;
+            float  _CorridorHeight;
+
+            // ── Fog corridor helper ───────────────────────────────────────────
+            bool in_fog_corridor(float3 worldPos)
+            {
+                if (_CorridorActive < 0.5) return false;
+
+                float2 startXZ  = _CorridorStartEndXZ.xy;
+                float2 endXZ    = _CorridorStartEndXZ.zw;
+                float2 axisXZ   = endXZ - startXZ;
+                float  axisLen  = length(axisXZ);
+                if (axisLen < 0.001) return false;
+                float2 axisNorm = axisXZ / axisLen;
+
+                float2 pointXZ  = float2(worldPos.x, worldPos.z);
+                float2 toPoint  = pointXZ - startXZ;
+
+                float t = dot(toPoint, axisNorm);
+                if (t < 0 || t > axisLen) return false;
+
+                float2 perp = toPoint - axisNorm * t;
+                if (length(perp) > _CorridorHalfWidth) return false;
+
+                float h = worldPos.y - _FloorY;
+                return (h >= 0 && h <= _CorridorHeight);
+            }
+
+            // ── Helpers ───────────────────────────────────────────────────────
 
             float henyey_greenstein(float cosAngle, float scattering)
             {
@@ -166,6 +197,7 @@ Shader "Custom/VolumetricFog"
 
            float get_fog_density(float3 worldPos, float distFromPlayer)
 {
+    if (in_fog_corridor(worldPos)) return 0;
     if (!within_ground_bounds(worldPos)) return 0;
 
     float height = worldPos.y - _FloorY;
@@ -207,6 +239,7 @@ Shader "Custom/VolumetricFog"
 // zodat de persoonlijke mist-muur stopt op de kaartrand als die dichterbij is.
 float get_wall_density(float3 worldPos, float distFromPlayer, float effectiveVis)
 {
+    if (in_fog_corridor(worldPos)) return 0;
     if (!within_ground_bounds(worldPos)) return 0;
 
     float height = worldPos.y - _FloorY;

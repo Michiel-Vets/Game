@@ -46,6 +46,7 @@ public class PowerUpSpawner : MonoBehaviour
     private int _collectedThisBreak;
     private int _spawnedThisBreak;
     private Transform _player;
+    private EnemySpawner _enemySpawner;
 
     /// <summary>Fractie van power-ups gepakt (0 = geen, 1 = alle). Bepaalt map-groei.</summary>
     public float PickupFraction => _spawnedThisBreak > 0
@@ -73,10 +74,11 @@ public class PowerUpSpawner : MonoBehaviour
         _hintBeamActive = false;
 
         _collectedThisBreak = 0;
-        _spawnedThisBreak = 0;
+        _spawnedThisBreak = powerUpsPerBreak;
 
+        if (_enemySpawner == null) _enemySpawner = FindObjectOfType<EnemySpawner>();
         for (int i = 0; i < powerUpsPerBreak; i++)
-            TrySpawnPowerUp();
+            _enemySpawner?.SpawnPowerUpScout(powerUpPrefab);
 
         _hintPosition = hintPosition;
 
@@ -167,6 +169,7 @@ public class PowerUpSpawner : MonoBehaviour
 
     private void ShowWaveHint()
     {
+        WaveManager.Instance?.OnAllPowerUpsCollected();
         if (waveHintPrefab == null || _hintPosition == Vector3.zero) return;
         _hintObject = Instantiate(waveHintPrefab, _hintPosition, Quaternion.identity);
     }

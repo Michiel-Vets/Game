@@ -147,6 +147,19 @@ public class GhostClothSetup : MonoBehaviour
         SetCrownVisible(effectiveAlpha > 0.005f);
     }
 
+    public void SetPowerUpCarrierLight()
+    {
+        var lg = new GameObject("CarrierLight");
+        lg.transform.SetParent(transform);
+        lg.transform.localPosition = Vector3.up * 1.2f;
+
+        var l       = lg.AddComponent<Light>();
+        l.type      = LightType.Point;
+        l.range     = 12f;
+        l.intensity = 4f;
+        l.color     = new Color(1f, 0.88f, 0.45f); // zelfde kleur als PowerUpItem
+    }
+
     public void SetScoutAppearance(bool isScout)
     {
         _isScout = isScout;

@@ -3046,7 +3046,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.CanvasScaler
   m_UiScaleMode: 0
   m_ReferencePixelsPerUnit: 100
-  m_ScaleFactor: 1
+  m_ScaleFactor: 0.78
   m_ReferenceResolution: {x: 1000, y: 1000}
   m_ScreenMatchMode: 0
   m_MatchWidthOrHeight: 0.5
@@ -3285,7 +3285,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: -811.6004, y: 174.05708}
+  m_AnchoredPosition: {x: -811.60156, y: 174.05469}
   m_SizeDelta: {x: -1045.6235, y: -1296.1447}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &452307539
@@ -3857,8 +3857,8 @@ MonoBehaviour:
   waveDurationPerEnemy: 4
   maxWaveDuration: 240
   initialBreakDuration: 20
-  firstBreakDuration: 40
-  breakDuration: 30
+  firstBreakDuration: 60
+  breakDuration: 60
   baseMaxEnemies: 3
   enemyGrowthFactor: 1.18
   maxEnemyLimit: 500
@@ -5924,6 +5924,8 @@ MonoBehaviour:
   scoutChancePerWave: 0.015
   scoutChanceMax: 0.35
   scoutPrefab: {fileID: 0}
+  powerUpScoutPrefab: {fileID: 0}
+  powerUpItemPrefab: {fileID: 1258376678775159418, guid: 0d7598f2ca22fbf4fad599e4800e65c5, type: 3}
   enemiesPerGroup: 4
   groupSpawnInterval: 8
 --- !u!4 &1095565199
@@ -6972,6 +6974,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 46090c4c1bfc10842b4a82e5ca67a5cd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HealthController
+  maxHealth: 100
+  currentHealth: 0
+  healthBar: {fileID: 0}
+  fullWidth: 200
+  barHeight: 20
 --- !u!1 &1378751801
 GameObject:
   m_ObjectHideFlags: 0
@@ -7597,6 +7604,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 46090c4c1bfc10842b4a82e5ca67a5cd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HealthController
+  maxHealth: 100
+  currentHealth: 0
+  healthBar: {fileID: 0}
+  fullWidth: 200
+  barHeight: 20
 --- !u!114 &1444180903
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -8281,6 +8293,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 46090c4c1bfc10842b4a82e5ca67a5cd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HealthController
+  maxHealth: 100
+  currentHealth: 0
+  healthBar: {fileID: 0}
+  fullWidth: 200
+  barHeight: 20
 --- !u!114 &1748236546
 MonoBehaviour:
   m_ObjectHideFlags: 0

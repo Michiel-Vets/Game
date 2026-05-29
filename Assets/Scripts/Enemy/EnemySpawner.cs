@@ -44,6 +44,12 @@ public class EnemySpawner : MonoBehaviour
     [Header("Scouts During Break")]
     [SerializeField] private GameObject scoutPrefab;
 
+    [Header("Power-Up Scouts")]
+    [Tooltip("Prefab voor de power-up drager scout (leeg = zelfde als scoutPrefab).")]
+    [SerializeField] private GameObject powerUpScoutPrefab;
+    [Tooltip("Prefab van het power-up item dat de scout dropt als hij gedood wordt.")]
+    [SerializeField] private GameObject powerUpItemPrefab;
+
     [Header("Group Spawning (Non-Siege Waves)")]
     [Tooltip("Aantal enemies per groep.")]
     [SerializeField] private int enemiesPerGroup = 4;
@@ -158,6 +164,64 @@ public class EnemySpawner : MonoBehaviour
         }
 
         activeEnemies.Add(enemy);
+    }
+
+    /// <summary>Spawnt een scout binnen de map die bij dood een power-up dropt.</summary>
+    public void SpawnPowerUpScout(GameObject dropPrefab = null)
+    {
+        Vector3 spawnPos = FindSpawnInsideMap();
+        if (spawnPos == Vector3.zero) return;
+
+        GameObject prefab = powerUpScoutPrefab != null ? powerUpScoutPrefab
+                          : scoutPrefab        != null ? scoutPrefab
+                          : enemyPrefab;
+        GameObject enemy = Instantiate(prefab, spawnPos, Quaternion.identity);
+
+        EnemyController controller = enemy.GetComponent<EnemyController>();
+        if (controller != null)
+        {
+            controller.SetWaveData(currentWaveNumber, 0f);
+            controller.SetPowerUpCarrierMode();
+            controller.SetSpawnedInsideMap();
+        }
+
+        // dropPrefab: eerst expliciete parameter, dan inspector-veld, dan Resources fallback
+        GameObject resolvedDrop = dropPrefab != null ? dropPrefab : powerUpItemPrefab;
+        PowerUpDropReward reward = enemy.GetComponent<PowerUpDropReward>()
+                                ?? enemy.AddComponent<PowerUpDropReward>();
+        reward.Setup(resolvedDrop);
+
+        activeEnemies.Add(enemy);
+    }
+
+    private Vector3 FindSpawnInsideMap()
+    {
+        if (MapController.Instance == null)
+        {
+            if (edgePoints.Count == 0) return Vector3.zero;
+            return edgePoints[Random.Range(0, edgePoints.Count)];
+        }
+
+        float mapRadius = MapController.Instance.CurrentRadius
+                        - MapController.Instance.HardWallInset - 3f;
+        mapRadius = Mathf.Max(mapRadius, 5f);
+        Vector3 center = MapController.Instance.PlatformCenter;
+
+        for (int attempt = 0; attempt < 15; attempt++)
+        {
+            float r = Mathf.Sqrt(Random.Range(0.09f, 0.81f)) * mapRadius;
+            float angle = Random.Range(0f, Mathf.PI * 2f);
+            Vector3 candidate = center + new Vector3(Mathf.Cos(angle) * r, 0f, Mathf.Sin(angle) * r);
+
+            Vector3 rayOrigin = candidate + Vector3.up * raycastHeight;
+            if (!Physics.Raycast(rayOrigin, Vector3.down, out RaycastHit hit,
+                    raycastHeight * 2f, groundLayer, QueryTriggerInteraction.Ignore))
+                continue;
+
+            return hit.point + Vector3.up * spawnYOffset;
+        }
+
+        return Vector3.zero;
     }
 
     private void Update()

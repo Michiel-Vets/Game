@@ -114,14 +114,17 @@ Material:
     - _GlossyReflections: 0
     - _GroundCenterX: 0
     - _GroundCenterZ: 0
-    - _GroundRadius: 149
+    - _GroundRadius: 50
     - _HeightPower: 2
     - _LightScattering: 0.2
-    - _MapRadius: 75
+    - _MapRadius: 40
     - _MapWallDensity: 6
     - _MapWallGhostRadius: 8
+    - _MapWallHeightReduction: 1
+    - _MapWallInset: 10
     - _MaxDistance: 40
     - _Metallic: 0
+    - _MistSwirlStrength: 1
     - _NoiseOffset: 1
     - _NoiseTiling: 1
     - _OcclusionStrength: 1
