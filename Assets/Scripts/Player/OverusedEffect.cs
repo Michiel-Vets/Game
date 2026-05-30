@@ -10,11 +10,11 @@ public class OverusedEffect : MonoBehaviour
 {
     [Header("HP Drain")]
     [Tooltip("HP per seconde dat de speler verliest tijdens overused.")]
-    [SerializeField] private float hpDrainPerSecond = 4f;
+    [SerializeField] private float hpDrainPerSecond = 18f;
 
     [Header("Fire Overlay")]
-    [SerializeField] private Color fireColorA = new Color(1f, 0.25f, 0f, 0.25f);
-    [SerializeField] private Color fireColorB = new Color(1f, 0.6f, 0f, 0.50f);
+    [SerializeField] private Color fireColorA = new Color(1f, 0.25f, 0f, 0.10f);
+    [SerializeField] private Color fireColorB = new Color(1f, 0.6f,  0f, 0.22f);
     [SerializeField] private float flickerSpeed = 9f;
 
     public bool IsActive { get; private set; }

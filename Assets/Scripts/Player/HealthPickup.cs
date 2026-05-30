@@ -43,6 +43,10 @@ public class HealthPickup : MonoBehaviour
         if (health.HealthPercentage >= 1f)
             return;
 
+        // Geen healen tijdens overused
+        if (ComboSystem.Instance != null && ComboSystem.Instance.IsOverused)
+            return;
+
         health.Heal(healAmount);
         Destroy(gameObject);
     }

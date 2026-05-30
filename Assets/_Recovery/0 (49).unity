@@ -6737,7 +6737,6 @@ MonoBehaviour:
   comboDamageMultiplier: 3
   overusedTextColor: {r: 1, g: 0.1, b: 0.05, a: 1}
   overusedDamageMultiplier: 3.5
-  overchargeDamagePercent: 0.15
   comboText: {fileID: 853490220}
   comboCanvasGroup: {fileID: 853490222}
   flashlightController: {fileID: 236473171}
@@ -6770,8 +6769,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::OverusedEffect
   hpDrainPerSecond: 4
-  fireColorA: {r: 1, g: 0.25, b: 0, a: 0.02745098}
-  fireColorB: {r: 1, g: 0.6, b: 0, a: 0.14901961}
+  fireColorA: {r: 1, g: 0.25, b: 0, a: 0.25}
+  fireColorB: {r: 1, g: 0.6, b: 0, a: 0.5}
   flickerSpeed: 9
 --- !u!1 &1364683371
 GameObject:
@@ -6919,11 +6918,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 46090c4c1bfc10842b4a82e5ca67a5cd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HealthController
-  maxHealth: 100
-  currentHealth: 0
-  healthBar: {fileID: 0}
-  fullWidth: 200
-  barHeight: 20
 --- !u!1 &1378751801
 GameObject:
   m_ObjectHideFlags: 0
@@ -7549,11 +7543,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 46090c4c1bfc10842b4a82e5ca67a5cd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HealthController
-  maxHealth: 100
-  currentHealth: 0
-  healthBar: {fileID: 0}
-  fullWidth: 200
-  barHeight: 20
 --- !u!114 &1444180903
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -8238,11 +8227,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 46090c4c1bfc10842b4a82e5ca67a5cd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HealthController
-  maxHealth: 100
-  currentHealth: 0
-  healthBar: {fileID: 0}
-  fullWidth: 200
-  barHeight: 20
 --- !u!114 &1748236546
 MonoBehaviour:
   m_ObjectHideFlags: 0

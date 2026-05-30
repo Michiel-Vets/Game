@@ -42,6 +42,17 @@ public class FlashlightController : MonoBehaviour
     [SerializeField] private float comboIntensityMultiplier = 1.6f;
     [SerializeField] private float comboSpotAngleMultiplier = 1.4f;
 
+    [Header("Strong Mode Flicker (oververhitting)")]
+    [Tooltip("Seconden continu Strong-modus voordat flikkeren begint.")]
+    [SerializeField] private float flickerStartTime = 4f;
+    [Tooltip("Seconden tussen twee flikkermomenten eenmaal oververhit.")]
+    [SerializeField] private float flickerInterval = 3f;
+    [SerializeField] private float flickerIntervalVariance = 1.2f;
+    [Tooltip("Hoe lang één flikker duurt (lamp volledig uit).")]
+    [SerializeField] private float flickerDuration = 0.20f;
+    [Tooltip("Hoe snel de oververhitting afkoelt als je niet in Strong-modus bent (per seconde).")]
+    [SerializeField] private float strongHoldCooldownRate = 0.5f;
+
     public bool IsOn => _mode != FlashlightMode.Off;
     public FlashlightMode CurrentMode => _mode;
 
@@ -50,6 +61,14 @@ public class FlashlightController : MonoBehaviour
     private float _baseSpotAngle;
     private float _baseIntensity;
     private HashSet<EnemyController> _litEnemies = new HashSet<EnemyController>();
+
+    // Flicker state
+    private float _strongHoldTime;
+    private float _flickerIntervalTimer;
+    private float _flickerTimer;
+    private bool  _isFlickering;
+
+    public bool IsFlickering => _isFlickering;
 
     private static readonly int PropPos      = Shader.PropertyToID("_FlashlightWorldPos");
     private static readonly int PropDir      = Shader.PropertyToID("_FlashlightWorldDir");
@@ -78,12 +97,29 @@ public class FlashlightController : MonoBehaviour
         {
             if (batteryController != null)
             {
-                float drainMult = GetDrainMultiplier();
-                if (ComboSystem.Instance != null && ComboSystem.Instance.IsComboActive)
-                    drainMult *= ComboSystem.Instance.OverchargedDrainMultiplier;
-                batteryController.DrainBattery(Time.deltaTime * drainMult);
+                // Geen batterijdrain tijdens overused — HP wordt dan al afgedraint
+                bool isOverusedNow = ComboSystem.Instance != null && ComboSystem.Instance.IsOverused;
+                if (!isOverusedNow)
+                {
+                    float drainMult = GetDrainMultiplier();
+                    if (ComboSystem.Instance != null && ComboSystem.Instance.IsComboActive)
+                        drainMult *= ComboSystem.Instance.OverchargedDrainMultiplier;
+                    batteryController.DrainBattery(Time.deltaTime * drainMult);
+                }
 
                 bool overused = ComboSystem.Instance != null && ComboSystem.Instance.IsOverused;
+
+                // Als de batterij leeg raakt tijdens een actieve combo: overcharge triggeren
+                // vóórdat de lamp uitgeschakeld wordt, zodat de batterij meteen hervuld wordt.
+                if (!batteryController.HasBattery && !overused)
+                {
+                    if (ComboSystem.Instance != null && ComboSystem.Instance.IsComboActive)
+                    {
+                        ComboSystem.Instance.NotifyBatteryDepleted();
+                        overused = ComboSystem.Instance.IsOverused; // refresh na de trigger
+                    }
+                }
+
                 if (!batteryController.HasBattery && !overused)
                 {
                     SetMode(FlashlightMode.Off);
@@ -91,7 +127,48 @@ public class FlashlightController : MonoBehaviour
                 }
             }
 
+            // ── Strong-modus oververhitting en flikker ──────────────────────────
+            bool isOverusedNowFlicker = ComboSystem.Instance != null && ComboSystem.Instance.IsOverused;
+            bool isComboNow           = ComboSystem.Instance != null && ComboSystem.Instance.IsComboActive;
+            if (_mode == FlashlightMode.Strong && !isOverusedNowFlicker && !isComboNow)
+            {
+                _strongHoldTime += Time.deltaTime;
+
+                if (_strongHoldTime >= flickerStartTime)
+                {
+                    _flickerIntervalTimer -= Time.deltaTime;
+                    if (_flickerIntervalTimer <= 0f && !_isFlickering)
+                    {
+                        // Start flikker
+                        _isFlickering = true;
+                        _flickerTimer = flickerDuration;
+                        _flickerIntervalTimer = flickerInterval
+                            + Random.Range(-flickerIntervalVariance, flickerIntervalVariance);
+                    }
+                }
+            }
+            else
+            {
+                _strongHoldTime = Mathf.Max(0f, _strongHoldTime - Time.deltaTime * strongHoldCooldownRate);
+                if (_strongHoldTime < flickerStartTime)
+                    _flickerIntervalTimer = Mathf.Max(_flickerIntervalTimer, flickerInterval * 0.5f);
+            }
+
+            // Flikker aftikken
+            if (_isFlickering)
+            {
+                _flickerTimer -= Time.deltaTime;
+                if (_flickerTimer <= 0f)
+                    _isFlickering = false;
+            }
+
             HandleBeam();
+        }
+        else
+        {
+            // Lamp uit: reset oververhitting
+            _strongHoldTime = Mathf.Max(0f, _strongHoldTime - Time.deltaTime * strongHoldCooldownRate);
+            _isFlickering   = false;
         }
 
         UpdateShaderGlobals();
@@ -174,7 +251,7 @@ public class FlashlightController : MonoBehaviour
 
     private void UpdateShaderGlobals()
     {
-        bool active = _mode != FlashlightMode.Off && flashlight != null;
+        bool active = _mode != FlashlightMode.Off && flashlight != null && !_isFlickering;
         Shader.SetGlobalFloat(PropEnabled, active ? 1f : 0f);
 
         if (!active) return;
@@ -188,6 +265,17 @@ public class FlashlightController : MonoBehaviour
 
     private void HandleBeam()
     {
+        // Tijdens een flikker is de lamp even uit — geesten krijgen een aanvalskans
+        if (_isFlickering)
+        {
+            if (flashlight != null) flashlight.enabled = false;
+            foreach (var enemy in _litEnemies)
+                enemy.SetTargetVisibility(0f);
+            _litEnemies.Clear();
+            return;
+        }
+        if (flashlight != null) flashlight.enabled = true;
+
         Vector3 origin    = transform.position;
         Vector3 direction = transform.forward;
 

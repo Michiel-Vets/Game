@@ -10,6 +10,10 @@ public class PickupSpawner : MonoBehaviour
     [Header("Spawn Limieten")]
     [SerializeField] private int maxBatteryPickups = 3;
     [SerializeField] private int maxHealthPickups = 3;
+    [Tooltip("Minimaal aantal pickups (battery + health samen) dat altijd op de map aanwezig moet zijn.")]
+    [SerializeField] private int minTotalPickups = 2;
+    [Tooltip("Hoe snel nieuwe pickups spawnen als het minimum niet gehaald wordt (seconden).")]
+    [SerializeField] private float emergencySpawnInterval = 4f;
 
     [Header("Spawn Interval")]
     [SerializeField] private float batterySpawnInterval = 15f;
@@ -30,6 +34,7 @@ public class PickupSpawner : MonoBehaviour
     private Transform player;
     private float batteryTimer;
     private float healthTimer;
+    private float emergencyTimer;
     private bool difficultyApplied;
 
     private void Start()
@@ -79,6 +84,26 @@ public class PickupSpawner : MonoBehaviour
             if (activeHealthPickups.Count < maxHealthPickups)
                 TrySpawn(healthPickupPrefab, activeHealthPickups);
         }
+
+        // Zorg dat er altijd minstens minTotalPickups op de kaart liggen
+        int total = activeBatteryPickups.Count + activeHealthPickups.Count;
+        if (total < minTotalPickups)
+        {
+            emergencyTimer -= Time.deltaTime;
+            if (emergencyTimer <= 0f)
+            {
+                emergencyTimer = emergencySpawnInterval;
+                // Spawn het type waarvan er minder is, of battery als gelijk
+                if (activeBatteryPickups.Count <= activeHealthPickups.Count)
+                    TrySpawn(batteryPickupPrefab, activeBatteryPickups);
+                else
+                    TrySpawn(healthPickupPrefab, activeHealthPickups);
+            }
+        }
+        else
+        {
+            emergencyTimer = 0f;
+        }
     }
 
     private void TrySpawn(GameObject prefab, List<GameObject> list)
@@ -126,6 +151,22 @@ public class PickupSpawner : MonoBehaviour
             list.Add(pickup);
             return;
         }
+    }
+
+    /// <summary>Verwijdert alle huidige pickups; de normale timer spawnt ze na korte vertraging opnieuw.</summary>
+    public void Reshuffle()
+    {
+        foreach (var go in activeBatteryPickups)
+            if (go != null) Destroy(go);
+        activeBatteryPickups.Clear();
+
+        foreach (var go in activeHealthPickups)
+            if (go != null) Destroy(go);
+        activeHealthPickups.Clear();
+
+        // Korte vertraging zodat de map volledig geschaald is vóór nieuwe pickups spawnen
+        batteryTimer = 1.5f;
+        healthTimer  = 2f;
     }
 
     private void CleanupDestroyed(List<GameObject> list)

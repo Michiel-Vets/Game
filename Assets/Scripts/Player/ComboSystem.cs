@@ -29,6 +29,8 @@ public class ComboSystem : MonoBehaviour
     [SerializeField] private Color overusedTextColor = new Color(1f, 0.1f, 0.05f);
     [Tooltip("Extra damage-multiplier op geesten tijdens overused (bovenop combo).")]
     [SerializeField, Range(1f, 8f)] private float overusedDamageMultiplier = 3.5f;
+    [Tooltip("Hoeveel % van de max health de speler verliest bij een overcharge.")]
+    [SerializeField, Range(0f, 0.5f)] private float overchargeDamagePercent = 0.15f;
 
     [Header("UI")]
     [SerializeField] private TMP_Text comboText;
@@ -61,6 +63,7 @@ public class ComboSystem : MonoBehaviour
 
     private Color _defaultTextColor;
     private OverusedEffect _overusedEffect;
+    private HealthController _healthController;
 
     private void Awake()
     {
@@ -68,6 +71,7 @@ public class ComboSystem : MonoBehaviour
         if (comboCanvasGroup != null) comboCanvasGroup.alpha = 0f;
         if (comboText != null) _defaultTextColor = comboText.color;
         _overusedEffect = GetComponent<OverusedEffect>();
+        _healthController = GetComponentInParent<HealthController>();
     }
 
     private void Update()
@@ -168,7 +172,7 @@ public class ComboSystem : MonoBehaviour
         if (comboText != null) comboText.color = _defaultTextColor;
         flashlightController?.SetComboBoosted(false);
         batteryController?.StopComboFlash();
-        batteryController?.EmptyBattery();   // overcharge verbruikt: batterij naar 0%
+        // Batterij NIET leegmaken — blijft op het niveau van het einde van de combo
     }
 
     private void TriggerOverused()
@@ -179,15 +183,32 @@ public class ComboSystem : MonoBehaviour
         _comboCount  = 0;
         _recentKills.Clear();
 
+        // Batterij volledig opladen (overcharge) en rood kleuren
+        batteryController?.StopComboFlash();
+        batteryController?.ResetBattery();
+        batteryController?.StartOverused();
+
+        // Speler neemt schade van de overcharge
+        if (_healthController != null && overchargeDamagePercent > 0f)
+            _healthController.TakeDamage(_healthController.MaxHealth * overchargeDamagePercent);
+
         // Tekst rood + zichtbaar houden
         if (comboText != null)  comboText.color = overusedTextColor;
         if (comboCanvasGroup != null) comboCanvasGroup.alpha = 1f;
         RefreshOverusedText();
 
         flashlightController?.SetComboBoosted(false);
-        batteryController?.StopComboFlash();
-        batteryController?.StartOverused();
         _overusedEffect?.StartEffect();
+    }
+
+    /// <summary>
+    /// Aanroepen vanuit FlashlightController zodra de batterij leeg raakt tijdens een actieve combo,
+    /// vóórdat de lamp uitgaat — zorgt dat de overcharge de batterij hervult.
+    /// </summary>
+    public void NotifyBatteryDepleted()
+    {
+        if (_comboActive && !_overused)
+            TriggerOverused();
     }
 
     private void StopOverused()
@@ -196,6 +217,7 @@ public class ComboSystem : MonoBehaviour
         if (comboCanvasGroup != null) comboCanvasGroup.alpha = 0f;
         if (comboText != null) comboText.color = _defaultTextColor;
         batteryController?.StopOverused();
+        batteryController?.EmptyBattery();
         _overusedEffect?.StopEffect();
         // Reset zodat een nieuwe combo kan starten
         _recentKills.Clear();

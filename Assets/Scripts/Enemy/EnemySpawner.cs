@@ -50,14 +50,17 @@ public class EnemySpawner : MonoBehaviour
     [Tooltip("Prefab van het power-up item dat de scout dropt als hij gedood wordt.")]
     [SerializeField] private GameObject powerUpItemPrefab;
 
-    [Header("Group Spawning (Non-Siege Waves)")]
-    [Tooltip("Aantal enemies per groep.")]
-    [SerializeField] private int enemiesPerGroup = 4;
-    [Tooltip("Seconden tussen groepen.")]
-    [SerializeField] private float groupSpawnInterval = 8f;
-
     private readonly List<GameObject> activeEnemies = new List<GameObject>();
+    private readonly List<GameObject> _breakEnemies = new List<GameObject>();
     private readonly List<Vector3> edgePoints = new List<Vector3>();
+
+    private struct SpawnGroup
+    {
+        public Vector3 Direction;
+        public int     Count;
+        public float   TriggerTime; // Time.time waarop deze groep spawnt
+    }
+    private readonly List<SpawnGroup> _pendingGroups = new List<SpawnGroup>();
 
     private float _baseEdgeScanRadius;
 
@@ -74,9 +77,6 @@ public class EnemySpawner : MonoBehaviour
     private bool isActive;
     private bool isBreak;
 
-    // Groepsspawn state
-    private int _remainingToSpawn;
-    private float _groupTimer;
 
     private void Start()
     {
@@ -89,7 +89,7 @@ public class EnemySpawner : MonoBehaviour
 
     public void OnWaveStarted(int wave, float aggression, int maxEnemies, float spawnInterval,
                               WaveType waveType, float healthMult, float speedMult, int spawnCap,
-                              Vector3 spawnDirection)
+                              List<Vector3> spawnDirections, float groupDelay)
     {
         currentWaveNumber = wave;
         currentAggressionLevel = aggression;
@@ -99,28 +99,62 @@ public class EnemySpawner : MonoBehaviour
         currentEnemyHealthMultiplier = healthMult;
         currentEnemySpeedMultiplier = speedMult;
         currentSpawnCap = spawnCap;
-        currentSpawnDirection = spawnDirection;
+        currentSpawnDirection = spawnDirections != null && spawnDirections.Count > 0
+            ? spawnDirections[0] : Vector3.forward;
         isBreak = false;
         spawnTimer = 0f;
+        _pendingGroups.Clear();
 
         // Map meeschalen met enemy count
         UpdateMapRadius(maxEnemies);
 
-        CleanupAllEnemies();
+        // Break-scouts wegsturen zonder drop te triggeren
+        foreach (var e in _breakEnemies)
+        {
+            if (e == null) continue;
+            e.GetComponent<PowerUpDropReward>()?.CancelDrop();
+            e.GetComponent<ScoutDropReward>()?.CancelDrop();
+            var ec = e.GetComponent<EnemyController>();
+            if (ec != null) ec.BeginFlyOut();
+            else Destroy(e);
+        }
+        _breakEnemies.Clear();
 
         if (currentWaveType == WaveType.Siege)
         {
-            // Siege: timer-based spawning zoals voorheen
             isActive = true;
         }
         else
         {
-            // Alle geesten spawnen tegelijk zodat ze samen door de mistwand laden
-            for (int i = 0; i < currentSpawnCap; i++)
-                SpawnSingleEnemy(currentSpawnDirection);
-            _remainingToSpawn = 0;
+            // Verdeel enemies gelijkmatig over de richtingen en plan ze met vertraging
+            ScheduleSpawnGroups(spawnDirections ?? new List<Vector3> { currentSpawnDirection },
+                                currentSpawnCap, groupDelay);
             isActive = false;
-            AssignPackLeader();
+        }
+    }
+
+    /// <summary>
+    /// Verdeelt <paramref name="totalCount"/> enemies over de opgegeven richtingen
+    /// en scheduleert elke groep met een vertraging van <paramref name="groupDelay"/> seconden.
+    /// </summary>
+    private void ScheduleSpawnGroups(List<Vector3> directions, int totalCount, float groupDelay)
+    {
+        if (directions.Count == 0) return;
+
+        int groupCount = directions.Count;
+        int baseCount  = totalCount / groupCount;
+        int remainder  = totalCount % groupCount;
+
+        for (int i = 0; i < groupCount; i++)
+        {
+            int count = baseCount + (i < remainder ? 1 : 0);
+            if (count <= 0) continue;
+            _pendingGroups.Add(new SpawnGroup
+            {
+                Direction   = directions[i],
+                Count       = count,
+                TriggerTime = Time.time + i * groupDelay,
+            });
         }
     }
 
@@ -128,12 +162,15 @@ public class EnemySpawner : MonoBehaviour
     {
         isActive = false;
         isBreak = true;
+        _pendingGroups.Clear();
+        CleanupAllEnemies();
     }
 
     public void SpawnScout()
     {
         if (!isBreak) return;
-        if (activeEnemies.Count >= 3) return;
+        int scoutCap = 3 + Mathf.FloorToInt(LastWaveSurvivorCount / 3f);
+        if (_breakEnemies.Count >= scoutCap) return;
 
         Vector3 spawnPos;
         if (MapController.Instance != null)
@@ -163,7 +200,7 @@ public class EnemySpawner : MonoBehaviour
             reward.Setup();
         }
 
-        activeEnemies.Add(enemy);
+        _breakEnemies.Add(enemy);
     }
 
     /// <summary>Spawnt een scout binnen de map die bij dood een power-up dropt.</summary>
@@ -191,7 +228,7 @@ public class EnemySpawner : MonoBehaviour
                                 ?? enemy.AddComponent<PowerUpDropReward>();
         reward.Setup(resolvedDrop);
 
-        activeEnemies.Add(enemy);
+        _breakEnemies.Add(enemy);
     }
 
     private Vector3 FindSpawnInsideMap()
@@ -231,11 +268,9 @@ public class EnemySpawner : MonoBehaviour
 
         CleanupDestroyedEnemies();
 
-        if (!isActive) return;
-
-        if (currentWaveType == WaveType.Siege)
+        // Siege: timer-based spawning
+        if (isActive && currentWaveType == WaveType.Siege)
         {
-            // Siege: één enemy tegelijk op interval
             spawnTimer += Time.deltaTime;
             if (spawnTimer >= currentSpawnInterval)
             {
@@ -244,57 +279,22 @@ public class EnemySpawner : MonoBehaviour
                     SpawnSingleEnemy(currentSpawnDirection);
             }
         }
-        else
+
+        // Multi-directie groepen: spawnen zodra hun TriggerTime bereikt is
+        for (int i = _pendingGroups.Count - 1; i >= 0; i--)
         {
-            // Andere waves: groepen op interval
-            if (_remainingToSpawn <= 0) return;
-
-            _groupTimer -= Time.deltaTime;
-            if (_groupTimer <= 0f)
-                SpawnGroup();
+            if (Time.time < _pendingGroups[i].TriggerTime) continue;
+            ExecuteSpawnGroup(_pendingGroups[i].Direction, _pendingGroups[i].Count);
+            _pendingGroups.RemoveAt(i);
         }
-    }
-
-    // ── Pack Leader ───────────────────────────────────────────────────────────
-
-    private void AssignPackLeader()
-    {
-        if (PackLeaderManager.Instance == null) return;
-
-        // Kies een willekeurige normale enemy (geen scout, geen elite) als leider.
-        // Als er geen normale enemies zijn, pak gewoon de eerste.
-        var candidates = new System.Collections.Generic.List<EnemyController>();
-        foreach (var go in activeEnemies)
-        {
-            if (go == null) continue;
-            var ec = go.GetComponent<EnemyController>();
-            if (ec != null && !ec.IsPackLeader)
-                candidates.Add(ec);
-        }
-        if (candidates.Count == 0) return;
-        PackLeaderManager.Instance.AssignLeader(candidates[Random.Range(0, candidates.Count)]);
     }
 
     // ── Groepsspawn ───────────────────────────────────────────────────────────
 
-    private void SpawnGroup()
+    private void ExecuteSpawnGroup(Vector3 direction, int count)
     {
-        // Elke groep uit een andere willekeurige richting
-        float angle = Random.Range(0f, 360f);
-        Vector3 groupDir = Quaternion.Euler(0f, angle, 0f) * Vector3.forward;
-
-        int toSpawn = Mathf.Min(enemiesPerGroup, _remainingToSpawn);
-        for (int i = 0; i < toSpawn; i++)
-        {
-            if (activeEnemies.Count >= currentSpawnCap) break;
-            SpawnSingleEnemy(groupDir);
-            _remainingToSpawn--;
-        }
-
-        _groupTimer = groupSpawnInterval;
-
-        if (_remainingToSpawn <= 0)
-            isActive = false;
+        for (int i = 0; i < count; i++)
+            SpawnSingleEnemy(direction);
     }
 
     private void SpawnSingleEnemy(Vector3 direction)
@@ -458,25 +458,32 @@ public class EnemySpawner : MonoBehaviour
 
     private void CleanupAllEnemies()
     {
+        LastWaveSurvivorCount = 0;
         foreach (var enemy in activeEnemies)
         {
             if (enemy == null) continue;
             var ec = enemy.GetComponent<EnemyController>();
-            if (ec != null && isBreak)
-                ec.BeginFlyOut(); // break-geesten vliegen dynamisch weg
+            if (ec != null)
+            {
+                LastWaveSurvivorCount++;
+                ec.BeginFlyOut();
+            }
             else
+            {
                 Destroy(enemy);
+            }
         }
         activeEnemies.Clear();
     }
 
+    public int LastWaveSurvivorCount { get; private set; }
+
     private void CleanupDestroyedEnemies()
     {
         for (int i = activeEnemies.Count - 1; i >= 0; i--)
-        {
-            if (activeEnemies[i] == null)
-                activeEnemies.RemoveAt(i);
-        }
+            if (activeEnemies[i] == null) activeEnemies.RemoveAt(i);
+        for (int i = _breakEnemies.Count - 1; i >= 0; i--)
+            if (_breakEnemies[i] == null) _breakEnemies.RemoveAt(i);
     }
 
     // ── Edge baking ───────────────────────────────────────────────────────────

@@ -44,8 +44,8 @@ public class BatteryPickup : MonoBehaviour
         if (battery == null || battery.BatteryFraction >= 1f)
             return;
 
-        // Geen batterijen oppakken tijdens overcharge
-        if (ComboSystem.Instance != null && ComboSystem.Instance.IsComboActive)
+        // Geen batterijen oppakken tijdens combo of overused
+        if (ComboSystem.Instance != null && (ComboSystem.Instance.IsComboActive || ComboSystem.Instance.IsOverused))
             return;
 
         battery.RechargeBattery(rechargeAmount);

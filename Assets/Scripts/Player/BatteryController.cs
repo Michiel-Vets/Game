@@ -3,6 +3,7 @@ using UnityEngine.UI;
 
 public class BatteryController : MonoBehaviour
 {
+    public static BatteryController Instance { get; private set; }
     [Header("Battery")]
     [SerializeField] private float maxBattery = 100f;
     [SerializeField] private float currentBattery;
@@ -29,6 +30,11 @@ public class BatteryController : MonoBehaviour
     private float parentHeight;
     private float originalOffsetMinY;
     private float originalOffsetMaxY;
+
+    private void Awake()
+    {
+        Instance = this;
+    }
 
     private void Start()
     {

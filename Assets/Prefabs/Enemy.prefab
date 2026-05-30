@@ -148,17 +148,20 @@ MonoBehaviour:
   weakenedMinFloatHeight: 0.15
   weakenedFallSpeed: 6
   attackDistance: 2.2
-  damagePercentage: 0.1
+  damagePercentage: 0.151
   knockbackForce: 8
   upwardKnockbackForce: 2
   fleeSpeed: 8
   fleeDuration: 2.5
-  leaderKillFleeDuration: 3
   weakenedSpeed: 1.5
   flashlightKillTime: 0.2
-  healTime: 5
+  healTime: 3
   partialHealTimeMultiplier: 2.5
   healSpeedPerWave: 0.08
+  beamWeakenThreshold: 0.18
+  beamPushThroughChance: 0.3
+  groupOpportunismRadius: 14
+  groupOpportunismChance: 0.6
   beamEvasionStrength: 6
   beamEvasionChance: 0.85
   speedMultiplierMin: 0.4

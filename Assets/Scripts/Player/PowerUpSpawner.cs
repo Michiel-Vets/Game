@@ -37,12 +37,12 @@ public class PowerUpSpawner : MonoBehaviour
 
     private readonly Vector4[] _beamPosArray = new Vector4[4];
 
-    // Hint beam (wave-richting aanwijzer)
-    private bool    _hintBeamActive;
-    private Vector3 _hintBeamPosition;
+    // Hint beams (wave-richting aanwijzers — één per spawn-groep)
+    private readonly List<Vector3>    _hintBeamPositions = new List<Vector3>();
+    private readonly List<GameObject> _hintObjects       = new List<GameObject>();
 
     private readonly List<GameObject> _activePowerUps = new List<GameObject>();
-    private GameObject _hintObject;
+    private List<Vector3> _pendingHintPositions = new List<Vector3>();
     private int _collectedThisBreak;
     private int _spawnedThisBreak;
     private Transform _player;
@@ -62,7 +62,7 @@ public class PowerUpSpawner : MonoBehaviour
     }
 
     /// <summary>Aanroepen vanuit WaveManager.BeginBreak().</summary>
-    public void OnBreakStarted(Vector3 hintPosition)
+    public void OnBreakStarted(IReadOnlyList<Vector3> hintPositions)
     {
         PlayerFinder.TryAssignIfNull(ref _player);
 
@@ -70,8 +70,11 @@ public class PowerUpSpawner : MonoBehaviour
             if (go != null) Destroy(go);
         _activePowerUps.Clear();
 
-        if (_hintObject != null) { Destroy(_hintObject); _hintObject = null; }
-        _hintBeamActive = false;
+        foreach (var go in _hintObjects) if (go != null) Destroy(go);
+        _hintObjects.Clear();
+        _hintBeamPositions.Clear();
+
+        _pendingHintPositions = new List<Vector3>(hintPositions ?? new List<Vector3>());
 
         _collectedThisBreak = 0;
         _spawnedThisBreak = powerUpsPerBreak;
@@ -80,7 +83,6 @@ public class PowerUpSpawner : MonoBehaviour
         for (int i = 0; i < powerUpsPerBreak; i++)
             _enemySpawner?.SpawnPowerUpScout(powerUpPrefab);
 
-        _hintPosition = hintPosition;
 
         // Stel beam-shader properties in en stuur posities
         Shader.SetGlobalFloat(_propBeamCosAngle, Mathf.Cos(beamHalfAngle * Mathf.Deg2Rad));
@@ -99,18 +101,25 @@ public class PowerUpSpawner : MonoBehaviour
         {
             if (go == null) continue;
             var item = go.GetComponent<PowerUpItem>();
-            if (item != null)
-                item.FadeOutAndDestroy(1f);
-            else
-                Destroy(go);
+            if (item != null) item.FadeOutAndDestroy(1f);
+            else Destroy(go);
         }
         _activePowerUps.Clear();
 
-        if (_hintObject != null) { Destroy(_hintObject); _hintObject = null; }
-
-        _hintBeamActive = false;
-        UpdateBeamShaderGlobals(); // stuurt count=0 + lege array
+        foreach (var go in _hintObjects) if (go != null) Destroy(go);
+        _hintObjects.Clear();
+        _hintBeamPositions.Clear();
+        _pendingHintPositions.Clear();
+        UpdateBeamShaderGlobals();
         WaveProgressUI.Instance?.HidePowerUpCount();
+    }
+
+    /// <summary>Aanroepen vanuit PowerUpDropReward nadat de pickup gespawnd is.</summary>
+    public void RegisterPowerUp(GameObject go)
+    {
+        if (go == null) return;
+        _activePowerUps.Add(go);
+        UpdateBeamShaderGlobals();
     }
 
     /// <summary>Aanroepen vanuit PowerUpItem.OnTriggerEnter().</summary>
@@ -124,25 +133,30 @@ public class PowerUpSpawner : MonoBehaviour
         WaveProgressUI.Instance?.ShowPowerUpCount(_collectedThisBreak, _spawnedThisBreak);
 
         if (_collectedThisBreak >= _spawnedThisBreak && _spawnedThisBreak > 0)
-            ShowWaveHint();
+            ShowWaveHints();
     }
 
-    /// <summary>Registreert de wave-hint als extra beam in de shader (aangeroepen door WaveHintDisplay).</summary>
+    /// <summary>Registreert één hint-beam in de shader (aangeroepen door WaveHintDisplay.Awake).</summary>
     public void RegisterHintBeam(Vector3 worldPosition)
     {
-        _hintBeamActive   = true;
-        _hintBeamPosition = worldPosition;
+        if (!_hintBeamPositions.Contains(worldPosition))
+            _hintBeamPositions.Add(worldPosition);
         UpdateBeamShaderGlobals();
     }
 
-    /// <summary>Verwijdert de wave-hint beam uit de shader.</summary>
+    /// <summary>Verwijdert de hint-beam van dit specifieke object (aangeroepen door WaveHintDisplay.OnDestroy).</summary>
+    public void UnregisterHintBeam(Vector3 worldPosition)
+    {
+        _hintBeamPositions.Remove(worldPosition);
+        UpdateBeamShaderGlobals();
+    }
+
+    /// <summary>Backward-compat: verwijdert alle hint beams.</summary>
     public void ClearHintBeam()
     {
-        _hintBeamActive = false;
+        _hintBeamPositions.Clear();
         UpdateBeamShaderGlobals();
     }
-
-    private Vector3 _hintPosition;
 
     private void UpdateBeamShaderGlobals()
     {
@@ -154,9 +168,10 @@ public class PowerUpSpawner : MonoBehaviour
             _beamPosArray[count] = new Vector4(p.x, p.y, p.z, 0f);
             count++;
         }
-        if (_hintBeamActive && count < 4)
+        foreach (var hintPos in _hintBeamPositions)
         {
-            _beamPosArray[count] = new Vector4(_hintBeamPosition.x, _hintBeamPosition.y, _hintBeamPosition.z, 0f);
+            if (count >= 4) break;
+            _beamPosArray[count] = new Vector4(hintPos.x, hintPos.y, hintPos.z, 0f);
             count++;
         }
         // Zet ongebruikte slots op nul zodat de GPU nooit stale posities leest
@@ -167,11 +182,15 @@ public class PowerUpSpawner : MonoBehaviour
         Shader.SetGlobalVectorArray(_propBeamPositions, _beamPosArray); // altijd sturen, ook bij count=0
     }
 
-    private void ShowWaveHint()
+    private void ShowWaveHints()
     {
         WaveManager.Instance?.OnAllPowerUpsCollected();
-        if (waveHintPrefab == null || _hintPosition == Vector3.zero) return;
-        _hintObject = Instantiate(waveHintPrefab, _hintPosition, Quaternion.identity);
+        if (waveHintPrefab == null || _pendingHintPositions.Count == 0) return;
+        foreach (var pos in _pendingHintPositions)
+        {
+            if (pos == Vector3.zero) continue;
+            _hintObjects.Add(Instantiate(waveHintPrefab, pos, Quaternion.identity));
+        }
     }
 
     private void TrySpawnPowerUp()

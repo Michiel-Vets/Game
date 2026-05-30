@@ -58,10 +58,7 @@ public class GhostClothSetup : MonoBehaviour
     private Transform _visualRoot;
 
     private bool   _isScout;
-    private bool   _isPackLeader;
     private float  _currentAlpha;
-    private Color? _packLeaderColorOverride;
-    private GameObject _crownRoot;
 
     private float _phaseX;
     private float _phaseZ;
@@ -91,7 +88,6 @@ public class GhostClothSetup : MonoBehaviour
         HideExistingRenderers();
         if (showHead) BuildHead();
         BuildRobe();
-        if (_isPackLeader) BuildLeaderCrown();
     }
 
     void Update()
@@ -108,20 +104,12 @@ public class GhostClothSetup : MonoBehaviour
         _cloth?.ClearTransformMotion();
     }
 
-    /// <summary>Stel een afwijkende kleur in voor de Pack Leader; wordt toegepast bij BuildRobe.</summary>
-    public void SetPackLeaderColor(Color c)
-    {
-        _packLeaderColorOverride = c;
-        _isPackLeader = true;
-    }
-
     /// <summary>Forceer de renderer volledig onzichtbaar, ook voor scouts (gebruikt in MistEntry-state).</summary>
     public void ForceInvisible()
     {
         if (_smr == null) return;
         _currentAlpha = 0f;
         _smr.enabled  = false;
-        SetCrownVisible(false);
     }
 
     public void SetVisibility(float alpha)
@@ -144,7 +132,6 @@ public class GhostClothSetup : MonoBehaviour
                 _smr.material.SetColor("_Color", c);
         }
 
-        SetCrownVisible(effectiveAlpha > 0.005f);
     }
 
     public void SetPowerUpCarrierLight()
@@ -158,6 +145,22 @@ public class GhostClothSetup : MonoBehaviour
         l.range     = 12f;
         l.intensity = 4f;
         l.color     = new Color(1f, 0.88f, 0.45f); // zelfde kleur als PowerUpItem
+    }
+
+    /// <summary>Zet zichtbaarheid zonder de scout-minimumwaarde toe te passen (voor fly-out fade).</summary>
+    public void SetVisibilityDirect(float alpha)
+    {
+        if (_smr == null) return;
+        _smr.enabled = alpha > 0.005f;
+        if (_smr.enabled)
+        {
+            Color c = _baseColor;
+            c.a = alpha;
+            if (_smr.material.HasProperty("_BaseColor"))
+                _smr.material.SetColor("_BaseColor", c);
+            else
+                _smr.material.SetColor("_Color", c);
+        }
     }
 
     public void SetScoutAppearance(bool isScout)
@@ -313,8 +316,6 @@ public class GhostClothSetup : MonoBehaviour
             _baseColor = robeMat.HasProperty("_BaseColor")
                 ? robeMat.GetColor("_BaseColor")
                 : robeMat.color;
-            if (_packLeaderColorOverride.HasValue)
-                _baseColor = _packLeaderColorOverride.Value;
             SetVisibility(0f);
         }
 
@@ -456,114 +457,4 @@ public class GhostClothSetup : MonoBehaviour
         cloth.coefficients = coeff;
     }
 
-    // ── Pack Leader Crown ────────────────────────────────────────────────────
-
-    private void SetCrownVisible(bool visible)
-    {
-        if (_crownRoot == null) return;
-        foreach (var r in _crownRoot.GetComponentsInChildren<Renderer>())
-            r.enabled = visible;
-        foreach (var l in _crownRoot.GetComponentsInChildren<Light>())
-            l.enabled = visible;
-    }
-
-    private void BuildLeaderCrown()
-    {
-        Color baseColor = _packLeaderColorOverride ?? new Color(1f, 0.25f, 0.05f);
-        Color glowColor = baseColor * 4f;
-        glowColor.a = 1f;
-
-        _crownRoot = new GameObject("LeaderCrown");
-        _crownRoot.transform.SetParent(_visualRoot);
-        _crownRoot.transform.localPosition = Vector3.zero;
-
-        Material glowMat = MakeEmissiveMaterial(glowColor);
-
-        float ringY      = hoodExtension + 0.05f;
-        float ringRadius = shoulderRadius * 1.15f;
-
-        // ── Holle ring via torus-mesh ────────────────────────────────────────
-        var ringGO = new GameObject("CrownBand");
-        ringGO.transform.SetParent(_crownRoot.transform);
-        ringGO.transform.localPosition = new Vector3(0f, ringY, 0f);
-        var ringMR = ringGO.AddComponent<MeshRenderer>();
-        ringMR.sharedMaterial = glowMat;
-        var ringMF = ringGO.AddComponent<MeshFilter>();
-        ringMF.sharedMesh = BuildTorusMesh(ringRadius, 0.05f, 32, 8);
-
-        // ── Glow-licht ───────────────────────────────────────────────────────
-        var lightGO = new GameObject("CrownLight");
-        lightGO.transform.SetParent(_crownRoot.transform);
-        lightGO.transform.localPosition = new Vector3(0f, ringY + 0.3f, 0f);
-        var l       = lightGO.AddComponent<Light>();
-        l.type      = LightType.Point;
-        l.range     = 5f;
-        l.intensity = 2.5f;
-        l.color     = new Color(baseColor.r, baseColor.g, baseColor.b);
-    }
-
-    private static Mesh BuildTorusMesh(float majorRadius, float minorRadius, int majorSegments, int minorSegments)
-    {
-        var verts = new Vector3[majorSegments * minorSegments];
-        var uvs   = new Vector2[verts.Length];
-        var tris  = new int[majorSegments * minorSegments * 6];
-
-        for (int i = 0; i < majorSegments; i++)
-        {
-            float theta = i * Mathf.PI * 2f / majorSegments;
-            for (int j = 0; j < minorSegments; j++)
-            {
-                float phi = j * Mathf.PI * 2f / minorSegments;
-                float x = (majorRadius + minorRadius * Mathf.Cos(phi)) * Mathf.Cos(theta);
-                float z = (majorRadius + minorRadius * Mathf.Cos(phi)) * Mathf.Sin(theta);
-                float y = minorRadius * Mathf.Sin(phi);
-                int idx = i * minorSegments + j;
-                verts[idx] = new Vector3(x, y, z);
-                uvs[idx]   = new Vector2((float)i / majorSegments, (float)j / minorSegments);
-            }
-        }
-
-        int t = 0;
-        for (int i = 0; i < majorSegments; i++)
-        {
-            int iNext = (i + 1) % majorSegments;
-            for (int j = 0; j < minorSegments; j++)
-            {
-                int jNext = (j + 1) % minorSegments;
-                int a = i     * minorSegments + j;
-                int b = iNext * minorSegments + j;
-                int c = iNext * minorSegments + jNext;
-                int d = i     * minorSegments + jNext;
-                tris[t++] = a; tris[t++] = b; tris[t++] = c;
-                tris[t++] = a; tris[t++] = c; tris[t++] = d;
-            }
-        }
-
-        var mesh = new Mesh { name = "TorusMesh" };
-        mesh.vertices  = verts;
-        mesh.uv        = uvs;
-        mesh.triangles = tris;
-        mesh.RecalculateNormals();
-        mesh.RecalculateBounds();
-        return mesh;
-    }
-
-    private static Material MakeEmissiveMaterial(Color emissive)
-    {
-        Shader unlit = Shader.Find("Universal Render Pipeline/Unlit");
-        if (unlit != null)
-        {
-            var mat = new Material(unlit);
-            mat.SetColor("_BaseColor", emissive);
-            return mat;
-        }
-        // Fallback voor niet-URP projecten
-        var fallback = new Material(Shader.Find("Standard") ?? Shader.Find("Sprites/Default"));
-        if (fallback.HasProperty("_EmissionColor"))
-        {
-            fallback.EnableKeyword("_EMISSION");
-            fallback.SetColor("_EmissionColor", emissive);
-        }
-        return fallback;
-    }
 }

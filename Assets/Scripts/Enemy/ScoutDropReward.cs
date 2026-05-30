@@ -16,6 +16,9 @@ public class ScoutDropReward : MonoBehaviour
 
     private void OnApplicationQuit() => _appQuitting = true;
 
+    /// <summary>Voorkomt dat de batterij dropt (aanroepen vóór Destroy bij despawn).</summary>
+    public void CancelDrop() => _hasDropped = true;
+
     public void Setup()
     {
         if (batteryPickupPrefab == null)
@@ -34,10 +37,12 @@ public class ScoutDropReward : MonoBehaviour
         _hasDropped = true;
 
         // Vind de grond onder de scout zodat de pickup niet in de lucht hangt
-        Vector3 spawnPos = transform.position;
-        Vector3 rayOrigin = spawnPos + Vector3.up * groundRaycastHeight;
+        Vector3 rayOrigin = new Vector3(transform.position.x, transform.position.y + groundRaycastHeight, transform.position.z);
+        Vector3 spawnPos = new Vector3(transform.position.x,
+            MapController.Instance != null ? MapController.Instance.SurfaceY + spawnYOffset : spawnYOffset,
+            transform.position.z);
         if (Physics.Raycast(rayOrigin, Vector3.down, out RaycastHit hit,
-                groundRaycastHeight * 2f, groundLayer, QueryTriggerInteraction.Ignore))
+                rayOrigin.y + groundRaycastHeight, groundLayer, QueryTriggerInteraction.Ignore))
             spawnPos = hit.point + Vector3.up * spawnYOffset;
 
         Instantiate(batteryPickupPrefab, spawnPos, Quaternion.identity);

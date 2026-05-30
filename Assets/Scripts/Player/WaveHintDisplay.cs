@@ -17,8 +17,9 @@ public class WaveHintDisplay : MonoBehaviour
     [SerializeField] private float pulseSpeed      = 2f;
     [SerializeField] private float pulseAmplitude  = 0.25f;
 
-    private Light _light;
-    private float _baseIntensity;
+    private Light   _light;
+    private float   _baseIntensity;
+    private Vector3 _registeredBeamPosition;
 
     private void Awake()
     {
@@ -36,9 +37,9 @@ public class WaveHintDisplay : MonoBehaviour
         _light.spotAngle     = lightSpotAngle;
         _baseIntensity       = lightIntensity;
 
-        // Registreer in Awake (niet Start): Awake loopt synchroon tijdens Instantiate,
-        // zodat de beam altijd voor OnWaveStarted() staat als ze op hetzelfde frame vallen.
-        PowerUpSpawner.Instance?.RegisterHintBeam(transform.position);
+        // Registreer in Awake zodat de beam altijd voor OnWaveStarted() staat.
+        _registeredBeamPosition = transform.position;
+        PowerUpSpawner.Instance?.RegisterHintBeam(_registeredBeamPosition);
 
         // Maak fog corridor aan van pijler naar midden
         Vector3 center = MapController.Instance != null
@@ -65,6 +66,6 @@ public class WaveHintDisplay : MonoBehaviour
 
     private void OnDestroy()
     {
-        PowerUpSpawner.Instance?.ClearHintBeam();
+        PowerUpSpawner.Instance?.UnregisterHintBeam(_registeredBeamPosition);
     }
 }

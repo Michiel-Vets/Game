@@ -129,21 +129,61 @@ public class EnemyController : MonoBehaviour
     [Header("Fleeing")]
     [SerializeField] private float fleeSpeed = 8f;
     [SerializeField] private float fleeDuration = 2.5f;
-    [SerializeField] private float leaderKillFleeDuration = 3f;
 
     [Header("Weakened")]
     [SerializeField] private float weakenedSpeed = 1.5f;
 
     [Header("Flashlight / Health")]
-    [SerializeField] private float flashlightKillTime = 2f;
+    [SerializeField] private float flashlightKillTime = 2.4f;
     [SerializeField] private float healTime = 5f;
     [SerializeField] private float partialHealTimeMultiplier = 2.5f;
     [Tooltip("Hoe veel sneller geesten healen per wave (0.08 = ~70% sneller op wave 10).")]
     [SerializeField] private float healSpeedPerWave = 0.08f;
 
+    [Header("Beam Resistance")]
+    [Tooltip("Fractie schade (0–1) die een geest moet opstapelen vóórdat hij Weakened wordt.")]
+    [SerializeField, Range(0f, 0.5f)] private float beamWeakenThreshold = 0.22f;
+    [Tooltip("Maximum schade die een geest kan oplopen VOORDAT hij Weakened is. " +
+             "Boven deze waarde moet hij eerst verzwakt worden om te sterven (0.80 = bijna dood, maar net niet).")]
+    [SerializeField, Range(0.5f, 1f)] private float weakenedKillCap = 0.80f;
+    [Tooltip("Kans dat een agressieve geest de verzwakking negeert en doorcharget naar de speler.")]
+    [SerializeField, Range(0f, 1f)]   private float beamPushThroughChance = 0.30f;
+    [Tooltip("Radius waarbinnen nabije geesten een opportunistische Chase starten als één geest Weakened gaat.")]
+    [SerializeField] private float groupOpportunismRadius = 14f;
+    [Tooltip("Kans per nabije geest dat hij de opportunistische Chase joinen.")]
+    [SerializeField, Range(0f, 1f)] private float groupOpportunismChance = 0.60f;
+
     [Header("Beam Evasion")]
     [SerializeField] private float beamEvasionStrength = 6f;
     [SerializeField, Range(0f, 1f)] private float beamEvasionChance = 0.85f;
+
+    [Header("Group Shield")]
+    [Tooltip("Radius waarbinnen bondgenoten meetellen voor het groepsschild.")]
+    [SerializeField] private float groupShieldRadius = 6f;
+    [Tooltip("Minimaal aantal nabije bondgenoten voor een schild-effect.")]
+    [SerializeField] private int groupShieldMinAllies = 3;
+    [Tooltip("Aantal bondgenoten waarbij het schild maximaal sterk is.")]
+    [SerializeField] private int groupShieldMaxAllies = 6;
+    [Tooltip("Maximale damage-reductie (0.4 = 40% minder zaklamp-schade in groep).")]
+    [SerializeField, Range(0f, 0.85f)] private float groupShieldMaxReduction = 0.40f;
+
+    [Header("Battery Behaviour")]
+    [Tooltip("Batterij-fractie waaronder geesten extra agressief worden.")]
+    [SerializeField, Range(0f, 0.5f)] private float batteryEmptyThreshold = 0.20f;
+    [Tooltip("Extra DynamicBonus-waarde als de batterij leeg is (optelt bij wave-bonus).")]
+    [SerializeField] private float batteryEmptyAggressionBonus = 0.50f;
+    [Tooltip("Extra push-through kans als de batterij leeg is.")]
+    [SerializeField, Range(0f, 0.5f)] private float batteryEmptyPushThroughBonus = 0.30f;
+    [Tooltip("Batterij-fractie waarboven geesten gaan lokken.")]
+    [SerializeField, Range(0.5f, 1f)] private float batteryFullThreshold = 0.80f;
+    [Tooltip("Batterij-fractie waaronder luring stopt en geest agressief wordt.")]
+    [SerializeField, Range(0.3f, 0.8f)] private float batteryLureStopThreshold = 0.55f;
+    [Tooltip("Kans dat een geest in lokmodus gaat als de batterij vol is (wave-agressie < 0.6).")]
+    [SerializeField, Range(0f, 1f)] private float batteryFullLureChance = 0.40f;
+    [Tooltip("Orbit-straal tijdens lokmodus (groot, zichtbaar voor de speler).")]
+    [SerializeField] private float lureOrbitRadius = 14f;
+    [Tooltip("Extra zichtbaarheid voor lokgeesten zodat de speler ze opmerkt.")]
+    [SerializeField, Range(0f, 0.4f)] private float lureVisibilityBoost = 0.12f;
 
     [Header("Aggression Scaling")]
     [SerializeField] private float speedMultiplierMin = 0.4f;
@@ -284,12 +324,18 @@ public class EnemyController : MonoBehaviour
 
     private bool _hasPassedMistWall = false;
     private bool _isMistEntryDisplacer = false;
+    private float _stuckTimer = 0f;
 
-    // Pack Leader
-    public bool IsPackLeader { get; private set; }
-    private float _leaderHealSlowMultiplier = 1f;
-    private bool _isLeaderFlee; // tijdelijke vlucht na leider-kill (keert terug)
     private bool _isFlyingOut;  // vlucht buiten de kaart (despawn als buiten de rand)
+    private bool _isLuring;    // lokt de speler weg (grote orbit, meer zichtbaar)
+    private float _groupShieldMult = 1f;
+    private float _groupShieldTimer;
+
+    // ── Gecoördineerde aanval ────────────────────────────────────────────────
+    // Rol die deze geest krijgt tijdens een gecoördineerde aanval (0=direct, 1=links, 2=rechts, 3=achter)
+    private int   _coordRole;
+    private float _coordDelay;          // seconden voor activatie
+    private Vector3 _coordPlayerFwd;    // speler-kijkrichting op moment van coördinatie
 
     // Ghost memory — succesvol healen vergroot ontwijkkans permanent
     private int   _evadeLearnCount     = 0;
@@ -504,10 +550,13 @@ public class EnemyController : MonoBehaviour
         currentWaveNumber = waveNumber;
         waveAggressionLevel = aggressionLevel;
 
+        // Basis agressiespectrum: hogere offset (-0.5 ipv -1) zodat geesten al op wave 1 agressiever zijn.
+        // De wave-aggression factor is verhoogd (2.8x ipv 2x) voor een steilere curve.
         float baseSpectrum = Mathf.Lerp(-1f, 1f, (float)formationSlot / 7f)
             + Random.Range(-0.15f, 0.15f);
-        aggressionSpectrum = Mathf.Clamp(baseSpectrum + aggressionLevel * 2f - 1f, -1f, 1f);
+        aggressionSpectrum = Mathf.Clamp(baseSpectrum + aggressionLevel * 2.8f - 0.5f, -1f, 1f);
 
+        // Basis lookahead via wave-aggressie; wordt verder verhoogd in UpdateState via dynamicBonus
         effectiveInterceptLookAhead = Mathf.Lerp(interceptLookAheadMin, interceptLookAheadMax, aggressionLevel);
 
         ApplyAggressionStats(aggressionLevel);
@@ -523,40 +572,6 @@ public class EnemyController : MonoBehaviour
         _evadeLearnIncrement = 0.05f;
     }
 
-    public void SetPackLeaderMode()
-    {
-        IsPackLeader = true;
-        moveSpeed *= 1.1f;
-        flashlightKillTime *= 1.5f;
-        transform.localScale *= 1.4f;
-        originalScale = transform.localScale;
-        // Rood-oranje tint zodat de leider duidelijk herkenbaar is
-        ghostClothSetup?.SetPackLeaderColor(new Color(1f, 0.25f, 0.05f));
-        ghostClothSetup?.NotifyScaleChanged();
-    }
-
-    public void ApplyLeaderKilledDebuff(float speedDebuff, float healSlowFactor)
-    {
-        if (IsPackLeader) return;
-        moveSpeed *= (1f - speedDebuff);
-        _leaderHealSlowMultiplier = healSlowFactor;
-    }
-
-    public void ApplyLeaderSurvivedBuff(float speedBuff)
-    {
-        if (IsPackLeader) return;
-        moveSpeed *= (1f + speedBuff);
-    }
-
-    public static void BroadcastLeaderKilled(float speedDebuff, float healSlowFactor)
-    {
-        foreach (var e in _allActive)
-        {
-            e.ApplyLeaderKilledDebuff(speedDebuff, healSlowFactor);
-            e.BeginLeaderFleeResponse();
-        }
-    }
-
     /// <summary>Roep aan vanuit EnemySpawner om de geest dynamisch naar buiten te laten vliegen.</summary>
     public void BeginFlyOut()
     {
@@ -564,36 +579,18 @@ public class EnemyController : MonoBehaviour
 
         _isFlyingOut = true;
         state = BehaviourState.Fleeing;
-        stateTimer = 15f; // maximale fallback
+        stateTimer = 15f;
 
-        // Vlieg recht naar buiten (weg van midden map)
+        // Begin meteen te vervagen zodat de geest onzichtbaar is terwijl hij wegvliegt
+        _targetVisibility = 0f;
+        _materializationProgress = 0f;
+
         Vector3 center = MapController.Instance != null
             ? MapController.Instance.PlatformCenter
             : Vector3.zero;
         Vector3 awayDir = transform.position - center;
         awayDir.y = 0f;
         fleeDirection = awayDir.sqrMagnitude > 0.01f ? awayDir.normalized : transform.forward;
-    }
-
-    private void BeginLeaderFleeResponse()
-    {
-        if (IsPackLeader) return;
-        if (state == BehaviourState.Dying || state == BehaviourState.Fleeing) return;
-
-        _isLeaderFlee = true;
-        state = BehaviourState.Fleeing;
-        stateTimer = leaderKillFleeDuration;
-
-        if (playerTarget != null)
-            fleeDirection = (transform.position - playerTarget.position).normalized;
-        else
-            fleeDirection = Quaternion.Euler(0f, Random.Range(0f, 360f), 0f) * Vector3.forward;
-    }
-
-    public static void BroadcastLeaderSurvived(float speedBuff)
-    {
-        foreach (var e in _allActive)
-            e.ApplyLeaderSurvivedBuff(speedBuff);
     }
 
     public void ApplyMultipliers(float healthMult, float speedMult, bool isVisible = false)
@@ -641,6 +638,104 @@ public class EnemyController : MonoBehaviour
 
     public void SetTargetVisibility(float visibility) => _targetVisibility = visibility;
 
+    /// <summary>
+    /// Verdeelt alle actieve geesten over vier aanvalsrollen en geeft elk een
+    /// gestaggerde activatievertraging zodat ze nooit allemaal tegelijk aanvallen.
+    /// Rol 0 = directe chase (dichtstbij), 1 = links, 2 = rechts, 3 = achter.
+    /// </summary>
+    private void AssignCoordinatedRoles()
+    {
+        if (playerTarget == null) return;
+
+        // Bepaal speler-kijkrichting (plat, geen Y)
+        Vector3 playerFwd = playerCamera != null
+            ? new Vector3(playerCamera.forward.x, 0f, playerCamera.forward.z).normalized
+            : transform.forward;
+
+        // Bouw pool van beschikbare geesten (niet zichzelf, niet stervend/weakened/vluchtend)
+        var pool = new System.Collections.Generic.List<EnemyController>();
+        foreach (var e in _allActive)
+        {
+            if (e.rb == rb) continue;
+            if (e.state == BehaviourState.Dying    ||
+                e.state == BehaviourState.Weakened  ||
+                e.state == BehaviourState.Fleeing   ||
+                e.state == BehaviourState.Lunge) continue;
+            pool.Add(e);
+        }
+        if (pool.Count == 0) return;
+
+        // Sorteer: dichtstbij de speler krijgt rol 0 (direct aanval)
+        Vector3 pPos = playerTarget.position;
+        pool.Sort((a, b) =>
+            Vector3.SqrMagnitude(a.transform.position - pPos)
+            .CompareTo(Vector3.SqrMagnitude(b.transform.position - pPos)));
+
+        // Wijs rollen toe en stagger de activatie
+        // Rol 0 (direct)  : 0.0–0.4 s  → valt meteen aan na de lunger
+        // Rol 1 (links)   : 1.0–1.8 s  → flankt van linkerkant terwijl 0 afleidt
+        // Rol 2 (rechts)  : 1.5–2.4 s  → flankt van rechterkant
+        // Rol 3 (achter)  : 2.5–3.5 s  → sluipt van achteren als de speler druk zet
+        float[] baseDelays = { 0f, 1.0f, 1.5f, 2.5f };
+        float[] jitter     = { 0.4f, 0.8f, 0.9f, 1.0f };
+
+        for (int i = 0; i < pool.Count; i++)
+        {
+            int role  = i % 4;
+            float delay = baseDelays[role] + Random.Range(0f, jitter[role]);
+            pool[i].ReceiveCoordinatedRole(role, delay, playerFwd);
+        }
+    }
+
+    /// <summary>Ontvang een aanvalsrol en activeer die na <paramref name="delay"/> seconden.</summary>
+    public void ReceiveCoordinatedRole(int role, float delay, Vector3 playerForward)
+    {
+        if (state == BehaviourState.Dying    ||
+            state == BehaviourState.Weakened  ||
+            state == BehaviourState.Fleeing   ||
+            state == BehaviourState.Lunge) return;
+
+        _coordRole      = role;
+        _coordDelay     = Mathf.Max(delay, 0f);
+        _coordPlayerFwd = playerForward.sqrMagnitude > 0.01f ? playerForward : Vector3.forward;
+    }
+
+    private void ActivateCoordinatedRole()
+    {
+        // Bereken de basishoek vanuit speler-kijkrichting
+        float fwdDeg = Mathf.Atan2(_coordPlayerFwd.x, _coordPlayerFwd.z) * Mathf.Rad2Deg;
+
+        switch (_coordRole)
+        {
+            case 0: // Directe frontale aanval — sprint recht op speler af
+                state = BehaviourState.Chase;
+                stateTimer = Random.Range(4f, 7f);
+                if (!isExhausted) isSprinting = true;
+                break;
+
+            case 1: // Links flank — nadert van de linkerkant van de speler (~90°)
+                flankAngle = fwdDeg + 85f + Random.Range(-25f, 25f);
+                state      = BehaviourState.Flank;
+                stateTimer = Random.Range(6f, 11f);
+                TryBeginFlankSprint();
+                break;
+
+            case 2: // Rechts flank — nadert van de rechterkant (~-90°)
+                flankAngle = fwdDeg - 85f + Random.Range(-25f, 25f);
+                state      = BehaviourState.Flank;
+                stateTimer = Random.Range(6f, 11f);
+                TryBeginFlankSprint();
+                break;
+
+            case 3: // Achterkant — sluipt van achter de speler (~180°)
+                flankAngle = fwdDeg + 175f + Random.Range(-20f, 20f);
+                state      = BehaviourState.Flank;
+                stateTimer = Random.Range(8f, 14f);
+                TryBeginFlankSprint();
+                break;
+        }
+    }
+
     // Wordt aangeroepen door een andere geest die Lunge activeert
     public void JoinCoordinatedAttack()
     {
@@ -679,8 +774,93 @@ public class EnemyController : MonoBehaviour
             if (state == BehaviourState.Lunge)
                 lungeMoveVelocity = Vector3.zero;
 
+            // ── Beam resistance buffer ────────────────────────────────────────
+            // Geesten worden pas Weakened nadat ze beamWeakenThreshold schade opgebouwd hebben.
+            // Dit geeft ze een aanvalsvenster bij kort zaklamplicht en verhindert instant-stop.
+            float effectiveThreshold = beamWeakenThreshold
+                * Mathf.Lerp(1.4f, 0.5f, (aggressionSpectrum + 1f) * 0.5f); // agressieve geesten drempel lager
+            if (flashlightDamage < effectiveThreshold) return;
+
+            // ── Push-through mechanic ─────────────────────────────────────────
+            // Agressieve geesten hebben kans om de beam te negeren en door te chargen.
+            float aggrT = (aggressionSpectrum + 1f) * 0.5f;
+            float dynamicPushBonus = WaveManager.Instance != null
+                ? WaveManager.Instance.DynamicAggressionBonus * 0.4f : 0f;
+            // Lege batterij → geesten forceren zich door de beam heen
+            float battFrac = BatteryController.Instance != null ? BatteryController.Instance.BatteryFraction : 1f;
+            if (battFrac < batteryEmptyThreshold)
+            {
+                float emptyT = 1f - battFrac / Mathf.Max(batteryEmptyThreshold, 0.01f);
+                dynamicPushBonus += batteryEmptyPushThroughBonus * emptyT;
+            }
+            float effectivePushChance = beamPushThroughChance
+                * Mathf.Lerp(0f, 1f, aggrT)
+                * (1f + dynamicPushBonus);
+
+            if (Random.value < effectivePushChance)
+            {
+                // Geest charget door — sprint naar speler, geen Weakened
+                state = BehaviourState.Chase;
+                isSprinting = true;
+                stateTimer = Random.Range(2f, 4f);
+                TriggerGroupOpportunism(); // nabije geesten zien dit als signaal om mee aan te vallen
+                return;
+            }
+
             EnterWeakened();
+            TriggerGroupOpportunism(); // speler is afgeleid → nabije geesten zien hun kans
         }
+    }
+
+    /// <summary>
+    /// Stuurt nabije geesten een Chase-signaal: de speler is bezig met één geest,
+    /// waardoor anderen hun kans zien om in te vallen.
+    /// </summary>
+    private void TriggerGroupOpportunism()
+    {
+        if (playerTarget == null) return;
+
+        Vector3 playerFwd = playerCamera != null
+            ? new Vector3(playerCamera.forward.x, 0f, playerCamera.forward.z).normalized
+            : Vector3.forward;
+
+        Collider[] nearby = Physics.OverlapSphere(
+            transform.position, groupOpportunismRadius, enemyLayers, QueryTriggerInteraction.Ignore);
+
+        // Bouw pool en wijs gespreide rollen toe (zelfde systeem als gecoördineerde aanval)
+        var pool = new System.Collections.Generic.List<EnemyController>();
+        foreach (Collider col in nearby)
+        {
+            if (col.attachedRigidbody == rb) continue;
+            var other = col.GetComponentInParent<EnemyController>();
+            if (other == null || Random.value > groupOpportunismChance) continue;
+            pool.Add(other);
+        }
+
+        float[] baseDelays = { 0f, 0.6f, 1.0f, 1.8f };
+        float[] jitter     = { 0.3f, 0.5f, 0.6f, 0.7f };
+        for (int i = 0; i < pool.Count; i++)
+        {
+            int role  = i % 4;
+            float delay = baseDelays[role] + Random.Range(0f, jitter[role]);
+            pool[i].ReceiveCoordinatedRole(role, delay, playerFwd);
+        }
+    }
+
+    /// <summary>
+    /// Aangeroepen door een nabije geest die Weakened of push-through triggert.
+    /// De roepende geest is de afleiding — deze geest pakt zijn kans om aan te vallen.
+    /// </summary>
+    public void JoinOpportunisticChase()
+    {
+        if (state == BehaviourState.Dying    ||
+            state == BehaviourState.Fleeing  ||
+            state == BehaviourState.Weakened ||
+            state == BehaviourState.Lunge) return;
+
+        state = BehaviourState.Chase;
+        stateTimer = Random.Range(3f, 6f);
+        if (!isExhausted) isSprinting = true;
     }
 
     private void UpdateFlashlightExposure(float dt)
@@ -692,20 +872,37 @@ public class EnemyController : MonoBehaviour
         if (!activeBeam)
             flashlightEffectFactor = 0f;
 
+        // Ververs het groepsschild periodiek (goedkoper dan elke FixedUpdate)
+        _groupShieldTimer -= dt;
+        if (_groupShieldTimer <= 0f)
+        {
+            _groupShieldTimer = 0.4f;
+            _groupShieldMult = ComputeGroupShieldMultiplier();
+        }
+
         if (activeBeam)
         {
-            flashlightDamage += dt / flashlightKillTime * flashlightEffectFactor;
-            flashlightDamage = Mathf.Clamp01(flashlightDamage);
+            flashlightDamage += dt / flashlightKillTime * flashlightEffectFactor * _groupShieldMult;
 
-            if (flashlightDamage + _materializationProgress >= 1f)
-                BeginDying();
+            if (state == BehaviourState.Weakened)
+            {
+                flashlightDamage = Mathf.Clamp01(flashlightDamage);
+                if (flashlightDamage + _materializationProgress >= 1f)
+                    BeginDying();
+            }
+            else
+            {
+                // Geest kan bijna dood gaan maar heeft dat laatste stukje Weakened nodig
+                flashlightDamage = Mathf.Min(flashlightDamage, weakenedKillCap);
+            }
         }
         else if (state == BehaviourState.Weakened && flashlightDamage > 0f)
         {
             float spectrumHealMultiplier = Mathf.Lerp(3.5f, 0.5f, (aggressionSpectrum + 1f) * 0.5f);
             int currentWave = WaveManager.Instance != null ? WaveManager.Instance.CurrentWave : 1;
             float waveHealBonus = 1f / (1f + (currentWave - 1) * healSpeedPerWave);
-            flashlightDamage -= dt / (healTime * partialHealTimeMultiplier * spectrumHealMultiplier * waveHealBonus * _leaderHealSlowMultiplier);
+            flashlightDamage -= dt / (healTime * partialHealTimeMultiplier * spectrumHealMultiplier * waveHealBonus)
+                                * DifficultySettings.EnemyHealSpeedMultiplier;
             flashlightDamage = Mathf.Max(0f, flashlightDamage);
 
             if (flashlightDamage <= 0f)
@@ -717,6 +914,36 @@ public class EnemyController : MonoBehaviour
                 TransitionToAttack(dist);
             }
         }
+        else if (flashlightDamage > 0f)
+        {
+            // Passieve afname van opgebouwde schade als de geest niet in de beam is en niet Weakened
+            // Zorgt dat korte flitsen niet permanent opstapelen
+            flashlightDamage -= dt / (healTime * 3f) * DifficultySettings.EnemyHealSpeedMultiplier;
+            flashlightDamage = Mathf.Max(0f, flashlightDamage);
+        }
+    }
+
+    private float ComputeGroupShieldMultiplier()
+    {
+        if (groupShieldRadius <= 0f || groupShieldMaxReduction <= 0f) return 1f;
+
+        Collider[] nearby = Physics.OverlapSphere(
+            transform.position, groupShieldRadius, enemyLayers, QueryTriggerInteraction.Ignore);
+
+        int allyCount = 0;
+        foreach (Collider col in nearby)
+        {
+            if (col.attachedRigidbody == rb) continue;
+            var other = col.GetComponentInParent<EnemyController>();
+            if (other != null && other.state != BehaviourState.Dying && other.state != BehaviourState.Fleeing)
+                allyCount++;
+        }
+
+        if (allyCount < groupShieldMinAllies) return 1f;
+
+        float t = Mathf.Clamp01(
+            (float)(allyCount - groupShieldMinAllies) / Mathf.Max(1, groupShieldMaxAllies - groupShieldMinAllies));
+        return 1f - groupShieldMaxReduction * t;
     }
 
     private void LearnEvasion()
@@ -731,13 +958,12 @@ public class EnemyController : MonoBehaviour
     private void EnterWeakened()
     {
         if (state == BehaviourState.Dying) return;
+        _isLuring = false;
         state = BehaviourState.Weakened;
     }
 
     private void BeginDying()
     {
-        if (IsPackLeader)
-            PackLeaderManager.Instance?.NotifyLeaderKilled();
         state = BehaviourState.Dying;
         deathTimer = deathRiseDuration;
         rb.linearVelocity = Vector3.zero;
@@ -771,8 +997,6 @@ public class EnemyController : MonoBehaviour
 
     private void UpdateVisibility()
     {
-        // Geesten die de mistwand nog niet zijn doorgekomen blijven volledig onzichtbaar.
-        // De mist-opening (displacer) is wél actief zodat de wand visueel openklaart.
         if (state == BehaviourState.MistEntry)
         {
             _currentVisibility = 0f;
@@ -780,10 +1004,25 @@ public class EnemyController : MonoBehaviour
             return;
         }
 
+        // Wegvliegende geesten vervagen snel en volledig (omzeilt scout-minimum in SetVisibility)
+        if (_isFlyingOut)
+        {
+            _currentVisibility = Mathf.MoveTowards(_currentVisibility, 0f, Time.fixedDeltaTime * 0.33f);
+            if (_currentVisibility <= 0f)
+                ghostClothSetup?.ForceInvisible();
+            else
+                ghostClothSetup?.SetVisibilityDirect(_currentVisibility);
+            return;
+        }
+
         float damageOpacity = Mathf.Clamp01(flashlightDamage + _materializationProgress);
 
         float naturalBase = state == BehaviourState.Retreat ? 0f : _materializationProgress;
         float ambientTarget = Mathf.Max(_targetVisibility, naturalBase);
+
+        // Lokgeesten geven zichzelf een kleine gloed — zichtbaar genoeg om op te vallen
+        if (_isLuring)
+            ambientTarget = Mathf.Max(ambientTarget, baseVisibility + lureVisibilityBoost);
 
         if (playerTarget != null)
         {
@@ -861,6 +1100,24 @@ public class EnemyController : MonoBehaviour
             isSprinting = true;
     }
 
+    // ── Dynamic aggression helpers ────────────────────────────────────────────
+
+    /// <summary>
+    /// Runtime aggressiebonus van WaveManager (kills + wave-voortgang + difficulty).
+    /// Wordt elke frame gelezen zodat geesten mid-wave slimmer worden.
+    /// </summary>
+    private float GetDynamicBonus()
+    {
+        float bonus = WaveManager.Instance != null ? WaveManager.Instance.DynamicAggressionBonus : 0f;
+        float battFrac = BatteryController.Instance != null ? BatteryController.Instance.BatteryFraction : 1f;
+        if (battFrac < batteryEmptyThreshold)
+        {
+            float emptyT = 1f - battFrac / Mathf.Max(batteryEmptyThreshold, 0.01f);
+            bonus += batteryEmptyAggressionBonus * emptyT;
+        }
+        return bonus;
+    }
+
     // ── State machine ────────────────────────────────────────────────────────
 
     private void UpdateState(float dt)
@@ -898,18 +1155,9 @@ public class EnemyController : MonoBehaviour
             if (stateTimer <= 0f)
             {
                 if (_isFlyingOut)
-                {
                     Destroy(gameObject);
-                }
-                else if (_isLeaderFlee)
-                {
-                    _isLeaderFlee = false;
-                    TransitionToAttack(distToPlayer);
-                }
                 else
-                {
                     BeginDying();
-                }
             }
             return;
         }
@@ -962,15 +1210,57 @@ public class EnemyController : MonoBehaviour
 
         if (state == BehaviourState.Retreat)
         {
-            if (_isPowerUpCarrier && playerTarget != null && distToPlayer < 18f)
+            if (_isPowerUpCarrier)
             {
-                retreatDirection = (transform.position - playerTarget.position).normalized;
-                retreatTimer = Mathf.Max(retreatTimer, 2f);
+                if (playerTarget != null && distToPlayer < 18f)
+                {
+                    retreatDirection = (transform.position - playerTarget.position).normalized;
+                    retreatTimer = Mathf.Max(retreatTimer, 2f);
+                }
+
+                // Stuck-detection: als de carrier nauwelijks beweegt, kies nieuwe richting
+                if (rb.linearVelocity.sqrMagnitude < 0.25f)
+                {
+                    _stuckTimer += dt;
+                    if (_stuckTimer > 1.5f)
+                    {
+                        _stuckTimer = 0f;
+                        TransitionToAttack(distToPlayer);
+                        return;
+                    }
+                }
+                else
+                {
+                    _stuckTimer = 0f;
+                }
             }
+
             retreatTimer -= dt;
             if (retreatTimer <= 0f)
                 TransitionToAttack(distToPlayer);
             return;
+        }
+
+        // ── Gecoördineerde aanval: activatievertraging aftikken ──────────────
+        if (_coordDelay > 0f)
+        {
+            _coordDelay -= dt;
+            if (_coordDelay <= 0f)
+                ActivateCoordinatedRole();
+        }
+
+        // ── Lure-stop: batterij gezakt → lokgeest wordt agressief ──────────────
+        if (_isLuring)
+        {
+            float battFracLure = BatteryController.Instance != null
+                ? BatteryController.Instance.BatteryFraction : 1f;
+            if (battFracLure < batteryLureStopThreshold)
+            {
+                _isLuring = false;
+                state = BehaviourState.Chase;
+                stateTimer = Random.Range(4f, 8f);
+                if (!isExhausted) isSprinting = true;
+            }
         }
 
         // ── Active attack states: Chase, Flank, Intercept ─────────────────────
@@ -983,10 +1273,18 @@ public class EnemyController : MonoBehaviour
         }
 
         float aggrT = (aggressionSpectrum + 1f) * 0.5f;
-        float effectiveLungeTrigger = lungeTriggerDistance * Mathf.Lerp(0.6f, 1.4f, aggrT);
+        float dynamicBonus = GetDynamicBonus();
+
+        // Lungetrigger-radius groeit iets naarmate de wave vordert
+        float effectiveLungeTrigger = lungeTriggerDistance
+            * Mathf.Lerp(0.6f, 1.4f, aggrT)
+            * (1f + dynamicBonus * 0.25f);
+
+        // Lunge-kans schaalt met aggression, wave-niveau én de runtime-bonus (kills + wave-voortgang)
         float effectiveLungeChance = lungeChance
             * Mathf.Lerp(0.4f, 1.6f, aggrT)
-            * Mathf.Lerp(0.02f, 1.4f, waveAggressionLevel);
+            * Mathf.Lerp(0.04f, 1.8f, waveAggressionLevel)
+            * (1f + dynamicBonus * 2.5f);
 
         if (lungeCooldownTimer.IsReady
             && distToPlayer <= effectiveLungeTrigger
@@ -1055,21 +1353,61 @@ public class EnemyController : MonoBehaviour
         {
             float angle = Random.Range(0f, 360f);
             retreatDirection = Quaternion.Euler(0f, angle, 0f) * Vector3.forward;
+
+            // Bias richting weg van de mistwand zodat de carrier niet vastloopt aan de rand
+            if (MapController.Instance != null)
+            {
+                Vector3 mapCenter = MapController.Instance.PlatformCenter;
+                float safeRadius = MapController.Instance.CurrentRadius
+                                 - MapController.Instance.HardWallInset - 10f;
+                Vector3 pos = transform.position;
+                float flatDist = new Vector2(pos.x - mapCenter.x, pos.z - mapCenter.z).magnitude;
+                if (flatDist >= safeRadius)
+                {
+                    Vector3 toCenter = new Vector3(mapCenter.x - pos.x, 0f, mapCenter.z - pos.z).normalized;
+                    retreatDirection = (retreatDirection + toCenter * 3f).normalized;
+                }
+            }
+
             retreatTimer = Random.Range(3f, 6f);
             state = BehaviourState.Retreat;
             return;
         }
 
+        // Stop luring wanneer we een niet-Flank state ingaan
+        _isLuring = false;
+
         bool canIntercept = distToPlayer >= minInterceptDistance && distToPlayer <= interceptDistance;
 
-        float wFlank = Mathf.Lerp(0.65f, 0.20f, waveAggressionLevel);
-        float wIntercept = canIntercept ? Mathf.Lerp(0.28f, 0.15f, waveAggressionLevel) : 0f;
-        float wChase = Mathf.Lerp(0.07f, 0.65f, waveAggressionLevel);
+        // Met hogere dynamicBonus (kills + wave-voortgang) verschuiven geesten naar Chase/Intercept:
+        // ze worden agressiever en minder geduldig met flanken.
+        float dynamicBonusTrans = GetDynamicBonus();
+        float effectiveAggression = Mathf.Clamp01(waveAggressionLevel + dynamicBonusTrans * 0.6f);
+
+        // ── Lokmodus: als de batterij vol is en aggression laag, lokt een deel van de geesten ─
+        float battFracTrans = BatteryController.Instance != null ? BatteryController.Instance.BatteryFraction : 1f;
+        bool canLure = !_isScoutMode
+            && battFracTrans >= batteryFullThreshold
+            && waveAggressionLevel < 0.60f
+            && Random.value < batteryFullLureChance;
+
+        float wFlank = Mathf.Lerp(0.60f, 0.12f, effectiveAggression);
+        float wIntercept = canIntercept ? Mathf.Lerp(0.30f, 0.22f, effectiveAggression) : 0f;
+        float wChase = Mathf.Lerp(0.10f, 0.75f, effectiveAggression);
 
         float total = wFlank + wIntercept + wChase;
         float roll = Random.value * total;
 
-        if (roll < wFlank)
+        if (canLure)
+        {
+            // Geest trekt een grote, zichtbare baan om de speler te lokken
+            _isLuring = true;
+            state = BehaviourState.Flank;
+            flankAngle = Random.Range(0f, 360f);
+            stateTimer = Random.Range(15f, 25f);
+            isSprinting = false; // lokgeesten bewegen traag en opvallend
+        }
+        else if (roll < wFlank)
         {
             state = BehaviourState.Flank;
             stateTimer = Mathf.Lerp(flankDuration * 1.6f, flankDuration, waveAggressionLevel)
@@ -1098,14 +1436,8 @@ public class EnemyController : MonoBehaviour
         lungeMoveVelocity = Vector3.zero;
         lungeCooldownTimer.Reset(lungeCooldown);
 
-        // Laat nabije geesten meteen meevallen
-        Collider[] nearby = Physics.OverlapSphere(
-            transform.position, coordAttackRadius, enemyLayers, QueryTriggerInteraction.Ignore);
-        foreach (Collider col in nearby)
-        {
-            if (col.attachedRigidbody == rb) continue;
-            col.GetComponentInParent<EnemyController>()?.JoinCoordinatedAttack();
-        }
+        // Verdeel alle geesten over aanvalsrollen met gestaggerde timing
+        AssignCoordinatedRoles();
     }
 
     private void UpdateLunge(float dt, float distToPlayer)
@@ -1130,7 +1462,8 @@ public class EnemyController : MonoBehaviour
         }
         else
         {
-            BeginRetreat();
+            // Na een lunge is de geest uitgeput — hij wordt verzwakt en kwetsbaar
+            EnterWeakened();
         }
     }
 
@@ -1142,6 +1475,7 @@ public class EnemyController : MonoBehaviour
             state == BehaviourState.Fleeing ||
             state == BehaviourState.Weakened) return;
 
+        _isLuring = false;
         state = BehaviourState.Retreat;
 
         float duration = Mathf.Lerp(maxRetreatDuration, minRetreatDuration, waveAggressionLevel);
@@ -1290,11 +1624,13 @@ public class EnemyController : MonoBehaviour
             + obstacle * avoidanceStrength
             + boundary * boundaryStrength;
 
+        // Beam-evasion kans groeit dynamisch: geesten leren de zaklamp beter te ontwijken
+        float dynamicEvasion = Mathf.Clamp01(beamEvasionChance + GetDynamicBonus() * 0.15f);
         if (isInFlashlightBeam
             && state != BehaviourState.Weakened
             && state != BehaviourState.Recoil
             && state != BehaviourState.Retreat
-            && Random.value <= beamEvasionChance)
+            && Random.value <= dynamicEvasion)
         {
             result += GetBeamEvasionVector(toPlayerFlat) * beamEvasionStrength;
         }
@@ -1325,8 +1661,12 @@ public class EnemyController : MonoBehaviour
             : Vector3.zero;
 
         float timeToReach = distToPlayer / Mathf.Max(moveSpeed * chaseSpeedMultiplier, 0.1f);
+        // Slimmere interceptie naarmate de wave vordert: hogere lookahead bij hoge dynamicBonus
+        float runtimeLookAhead = Mathf.Min(
+            effectiveInterceptLookAhead * (1f + GetDynamicBonus() * 0.8f),
+            interceptLookAheadMax * 1.5f);
         Vector3 toIntercept = playerTarget.position
-            + playerVel * timeToReach * effectiveInterceptLookAhead
+            + playerVel * timeToReach * runtimeLookAhead
             - transform.position;
         toIntercept.y = 0f;
         return toIntercept.sqrMagnitude > 0.01f ? toIntercept.normalized : toPlayerFlat;
@@ -1336,8 +1676,14 @@ public class EnemyController : MonoBehaviour
     {
         if (distToPlayer <= attackDistance) return toPlayerFlat;
 
-        // Early waves orbit further out; scales toward flankOrbitRadius at high aggression
-        float effectiveRadius = Mathf.Lerp(flankOrbitRadiusEarlyWave, flankOrbitRadius, waveAggressionLevel);
+        float effectiveRadius;
+        if (_isLuring)
+            // Lokgeest houdt een grote afstand om zichtbaar maar buiten direct gevaar te blijven
+            effectiveRadius = lureOrbitRadius;
+        else
+            // Early waves orbit further out; scales toward flankOrbitRadius at high aggression
+            effectiveRadius = Mathf.Lerp(flankOrbitRadiusEarlyWave, flankOrbitRadius, waveAggressionLevel);
+
         Vector3 orbitOffset = Quaternion.Euler(0f, flankAngle, 0f) * Vector3.forward * effectiveRadius;
         Vector3 toTarget = playerTarget.position + orbitOffset - transform.position;
         toTarget.y = 0f;
@@ -1414,6 +1760,9 @@ public class EnemyController : MonoBehaviour
         // MistEntry-geesten laden recht naar binnen: geen enkele boundary-push
         if (state == BehaviourState.MistEntry) return Vector3.zero;
 
+        // Wegvliegende geesten mogen de muur wél passeren
+        if (_isFlyingOut) return Vector3.zero;
+
         // Geesten die al door de muur zijn mogen er niet meer uit
         if (_hasPassedMistWall && MapController.Instance != null)
         {
@@ -1480,7 +1829,9 @@ public class EnemyController : MonoBehaviour
         if (state == BehaviourState.Retreat) return retreatSpeed;
 
         float baseSpeed = moveSpeed * chaseSpeedMultiplier;
-        float speed = baseSpeed * GetDistanceBoost(distToPlayer) * GetFatigueMultiplier();
+        // Runtime snelheidsbonus: geesten worden sneller naarmate meer kills + wave-voortgang
+        float runtimeSpeedMult = 1f + GetDynamicBonus() * 0.35f;
+        float speed = baseSpeed * GetDistanceBoost(distToPlayer) * GetFatigueMultiplier() * runtimeSpeedMult;
 
         if (isSprinting) speed *= sprintSpeedMultiplier;
         else if (isExhausted) speed *= exhaustedSpeedMultiplier;
@@ -1642,7 +1993,7 @@ public class EnemyController : MonoBehaviour
         if (health == null || !health.CompareTag("Player")) return;
 
         hasHit = true;
-        WaveManager.Instance?.NotifyEnemyKilled();
+        WaveManager.Instance?.NotifyEnemyKilled(countForCombo: false);
 
         health.TakeDamage(health.MaxHealth * damagePercentage);
 
