@@ -316,7 +316,7 @@ public class GhostClothSetup : MonoBehaviour
             _baseColor = robeMat.HasProperty("_BaseColor")
                 ? robeMat.GetColor("_BaseColor")
                 : robeMat.color;
-            SetVisibility(0f);
+            ForceInvisible(); // begin altijd volledig onzichtbaar, ook voor scouts
         }
 
         _cloth = robeGO.AddComponent<Cloth>();

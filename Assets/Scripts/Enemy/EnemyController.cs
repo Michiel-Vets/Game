@@ -46,7 +46,7 @@ public class EnemyController : MonoBehaviour
     [Header("Distance Speed Boost")]
     [SerializeField] private float boostStartDistance = 15f;
     [SerializeField] private float boostMaxDistance = 50f;
-    [SerializeField] private float maxBoostMultiplier = 2f;
+    [SerializeField] private float maxBoostMultiplier = 1.3f;
 
     [Header("Surround & Flank")]
     [SerializeField] private float flankDuration = 12f;
@@ -94,6 +94,8 @@ public class EnemyController : MonoBehaviour
     [Header("Boundary")]
     [SerializeField] private float boundaryLookAhead = 3f;
     [SerializeField] private float boundaryStrength = 6f;
+    [Tooltip("Minimale afstand tot de mist muur die geesten bewaren nadat ze binnen zijn (units).")]
+    [SerializeField] private float mistWallKeepoutDistance = 10f;
 
     [Header("Height Variation")]
     [SerializeField] private float heightChangeInterval = 3f;
@@ -570,6 +572,23 @@ public class EnemyController : MonoBehaviour
         ghostClothSetup?.NotifyScaleChanged();
         _maxEvadeLearnCount  = 2;
         _evadeLearnIncrement = 0.05f;
+    }
+
+    /// <summary>
+    /// Harde ondergrens: geen geest mag kleiner zijn dan 80 % van zijn basis-prefabschaal.
+    /// Aanroepen nadat alle mode-methoden zijn toegepast.
+    /// </summary>
+    public void EnforceMinimumScale()
+    {
+        Vector3 minScale = _baseScale * 0.8f;
+        if (transform.localScale.x < minScale.x ||
+            transform.localScale.y < minScale.y ||
+            transform.localScale.z < minScale.z)
+        {
+            transform.localScale = Vector3.Max(transform.localScale, minScale);
+            originalScale = transform.localScale;
+            ghostClothSetup?.NotifyScaleChanged();
+        }
     }
 
     /// <summary>Roep aan vanuit EnemySpawner om de geest dynamisch naar buiten te laten vliegen.</summary>
@@ -1770,7 +1789,7 @@ public class EnemyController : MonoBehaviour
             float wallRadius = MapController.Instance.CurrentRadius - MapController.Instance.HardWallInset;
             Vector3 pos = transform.position;
             float flatDist = new Vector2(pos.x - mapCenter.x, pos.z - mapCenter.z).magnitude;
-            if (flatDist >= wallRadius - boundaryLookAhead)
+            if (flatDist >= wallRadius - mistWallKeepoutDistance)
             {
                 Vector3 toCenter = new Vector3(mapCenter.x - pos.x, 0f, mapCenter.z - pos.z);
                 return toCenter.normalized;

@@ -324,6 +324,7 @@ public class EnemySpawner : MonoBehaviour
             controller.ApplyMultipliers(currentEnemyHealthMultiplier, currentEnemySpeedMultiplier, isVisible);
 
             ApplyVariant(controller);
+            controller.EnforceMinimumScale(); // harde cap: nooit kleiner dan 80 % van basisschaal
         }
 
         activeEnemies.Add(enemy);
