@@ -1481,8 +1481,8 @@ public class EnemyController : MonoBehaviour
         }
         else
         {
-            // Na een lunge is de geest uitgeput — hij wordt verzwakt en kwetsbaar
-            EnterWeakened();
+            // Na een lunge retreatet de geest even voor hij herneemt
+            BeginRetreat();
         }
     }
 

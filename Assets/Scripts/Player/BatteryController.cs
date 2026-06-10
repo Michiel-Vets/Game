@@ -92,8 +92,6 @@ public class BatteryController : MonoBehaviour
         if (!_overused) UpdateBatteryVisuals();
     }
 
-    public void TickComboFlash(float deltaTime) { }
-
     public void StartOverused()
     {
         _overused = true;

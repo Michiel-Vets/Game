@@ -193,42 +193,6 @@ public class PowerUpSpawner : MonoBehaviour
         }
     }
 
-    private void TrySpawnPowerUp()
-    {
-        if (powerUpPrefab == null) return;
-
-        float mapRadius = MapController.Instance != null
-            ? MapController.Instance.CurrentRadius - MapController.Instance.HardWallInset - 3f
-            : 30f;
-        mapRadius = Mathf.Max(mapRadius, 5f);
-
-        Vector3 center = MapController.Instance != null
-            ? new Vector3(MapController.Instance.PlatformCenter.x, 0f, MapController.Instance.PlatformCenter.z)
-            : Vector3.zero;
-
-        for (int attempt = 0; attempt < 15; attempt++)
-        {
-            // Uniforme ring-verdeling van 30% tot 90% van de map radius
-            float r = Mathf.Sqrt(Random.Range(0.09f, 0.81f)) * mapRadius;
-            float angle = Random.Range(0f, Mathf.PI * 2f);
-            Vector3 candidate = center + new Vector3(Mathf.Cos(angle) * r, 0f, Mathf.Sin(angle) * r);
-
-            if (_player != null && Vector3.Distance(candidate, _player.position) < minDistFromPlayer)
-                continue;
-
-            Vector3 rayOrigin = candidate + Vector3.up * raycastHeight;
-            if (!Physics.Raycast(rayOrigin, Vector3.down, out RaycastHit hit,
-                    raycastHeight * 2f, groundLayer, QueryTriggerInteraction.Ignore))
-                continue;
-
-            Vector3 spawnPos = hit.point + Vector3.up * spawnYOffset;
-            var go = Instantiate(powerUpPrefab, spawnPos, Quaternion.identity);
-            _activePowerUps.Add(go);
-            _spawnedThisBreak++;
-            return;
-        }
-    }
-
     private void CleanupList()
     {
         for (int i = _activePowerUps.Count - 1; i >= 0; i--)

@@ -111,10 +111,6 @@ public class ComboSystem : MonoBehaviour
                 return;
             }
         }
-        else
-        {
-            batteryController?.TickComboFlash(Time.deltaTime);
-        }
     }
 
     // ── Kill events ──────────────────────────────────────────────────────────

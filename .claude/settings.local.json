@@ -32,7 +32,20 @@
       "Bash(python3 \"C:\\\\Users\\\\MichielVets\\\\AppData\\\\Roaming\\\\Claude\\\\local-agent-mode-sessions\\\\skills-plugin\\\\37eacd1e-929b-4099-a3d3-9e6baa298b8c\\\\805881fa-e120-4630-b0fb-724a3cc8d876\\\\skills\\\\pptx\\\\scripts\\\\extract_text.py\" \"C:\\\\Users\\\\MichielVets\\\\Downloads\\\\GeestLamp_v5_2.pptx\")",
       "PowerShell(Get-Command py -ErrorAction SilentlyContinue)",
       "PowerShell(Get-Command python3.exe -ErrorAction SilentlyContinue)",
-      "PowerShell($skillBase = \"C:\\\\Users\\\\MichielVets\\\\AppData\\\\Roaming\\\\Claude\\\\local-agent-mode-sessions\\\\skills-plugin\\\\37eacd1e-929b-4099-a3d3-9e6baa298b8c\\\\805881fa-e120-4630-b0fb-724a3cc8d876\\\\skills\\\\pptx\"; py \"$skillBase\\\\scripts\\\\extract_text.py\" \"C:\\\\Users\\\\MichielVets\\\\Downloads\\\\GeestLamp_v5_2.pptx\")"
+      "PowerShell($skillBase = \"C:\\\\Users\\\\MichielVets\\\\AppData\\\\Roaming\\\\Claude\\\\local-agent-mode-sessions\\\\skills-plugin\\\\37eacd1e-929b-4099-a3d3-9e6baa298b8c\\\\805881fa-e120-4630-b0fb-724a3cc8d876\\\\skills\\\\pptx\"; py \"$skillBase\\\\scripts\\\\extract_text.py\" \"C:\\\\Users\\\\MichielVets\\\\Downloads\\\\GeestLamp_v5_2.pptx\")",
+      "Bash(Get-ChildItem -Recurse -Filter \"*.cs\")",
+      "Bash(Get-Content \"Assets\\\\Scenes\\\\Game.unity\")",
+      "Bash(Select-String \"^--- !u!114 &\" -A 50)",
+      "Bash(Select-String \"m_Script|fileID: 0|'':\")",
+      "Bash(grep -B 20 \"m_Script: {fileID: 11500000, guid: 7f0df26980ab492478fafd54002b9cab\" Assets/Scenes/Game.unity)",
+      "Bash(grep -B 20 \"m_Script: {fileID: 11500000, guid: 6bc456d08409f4140b331ab2f4b23f16\" Assets/Scenes/Game.unity)",
+      "Bash(grep -B 20 \"m_Script: {fileID: 11500000, guid: 46090c4c1bfc10842b4a82e5ca67a5cd\" Assets/Scenes/Game.unity)",
+      "Bash(awk '/^--- !u!1 &/{id=$0} /m_EditorClassIdentifier: Assembly-CSharp::HealthController/{if \\(id\\) print id}' Assets/Scenes/Game.unity)",
+      "Bash(awk '/^--- !u!1 &1444180900/,/m_Name:/{print}' Assets/Scenes/Game.unity)",
+      "Bash(awk '/^--- !u!1 &1748236543/,/m_Name:/{print}' Assets/Scenes/Game.unity)",
+      "Bash(awk '/^--- !u!1 &3436731957858745123/,/m_Name:/{print}' Assets/Scenes/Game.unity)",
+      "Bash(Remove-Item \"C:\\\\Users\\\\MichielVets\\\\Documents\\\\GitHub\\\\Game\\\\Assets\\\\Scripts\\\\Enemy\\\\PackLeaderManager.cs\" -Force)",
+      "Bash(Remove-Item \"C:\\\\Users\\\\MichielVets\\\\Documents\\\\GitHub\\\\Game\\\\Assets\\\\Scripts\\\\Enemy\\\\PackLeaderManager.cs.meta\" -Force -ErrorAction SilentlyContinue)"
     ]
   }
 }

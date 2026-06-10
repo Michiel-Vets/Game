@@ -24,8 +24,10 @@ public class MapController : MonoBehaviour
     [SerializeField] private float cylinderScaleFactor = 0.5f;
 
     [Header("Radius Scaling")]
-    [Tooltip("Startradius van het platform (wave 1).")]
-    [SerializeField] private float minRadius = 100f;
+    [Tooltip("Startradius van het platform (wave 1). Map groeit vanaf hier.")]
+    [SerializeField] private float startRadius = 100f;
+    [Tooltip("Minimale radius — map kan nooit kleiner worden dan dit.")]
+    [SerializeField] private float minRadius = 70f;
     [Tooltip("Maximale radius die het platform kan bereiken.")]
     [SerializeField] private float maxRadius = 400f;
     [Tooltip("Groei in radius per wave (minRadius + wave * groei).")]
@@ -86,10 +88,10 @@ public class MapController : MonoBehaviour
     private void Awake()
     {
         Instance      = this;
-        CurrentRadius = minRadius;
-        _targetRadius = minRadius;
-        GrowthRingInnerRadius = minRadius;
-        GrowthRingOuterRadius = minRadius;
+        CurrentRadius = startRadius;
+        _targetRadius = startRadius;
+        GrowthRingInnerRadius = startRadius;
+        GrowthRingOuterRadius = startRadius;
     }
 
     private void Start()
@@ -129,7 +131,7 @@ public class MapController : MonoBehaviour
         else
         {
             float fullTarget = Mathf.Clamp(
-                minRadius + (waveNumber - 1) * radiusGrowthPerWave,
+                startRadius + (waveNumber - 1) * radiusGrowthPerWave,
                 minRadius,
                 maxRadius);
             _targetRadius = Mathf.Lerp(CurrentRadius, fullTarget, powerUpGrowthModifier);

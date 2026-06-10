@@ -193,9 +193,6 @@ public class FlashlightController : MonoBehaviour
         }
     }
 
-    // Backwards-compat alias (werd aangeroepen vanuit PlayerController)
-    public void Toggle() => CycleMode();
-
     private void SetMode(FlashlightMode mode)
     {
         _mode = mode;

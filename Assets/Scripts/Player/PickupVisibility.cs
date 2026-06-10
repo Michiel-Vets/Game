@@ -6,11 +6,13 @@ public class PickupVisibility : MonoBehaviour
 
     private Renderer[] _renderers;
     private Transform _player;
+    private MaterialPropertyBlock _propBlock;
 
     private void Start()
     {
         _renderers = GetComponentsInChildren<Renderer>();
         _player = PlayerFinder.FindPlayer();
+        _propBlock = new MaterialPropertyBlock();
     }
 
     private void Update()
@@ -24,10 +26,9 @@ public class PickupVisibility : MonoBehaviour
 
         foreach (Renderer r in _renderers)
         {
-            MaterialPropertyBlock block = new MaterialPropertyBlock();
-            r.GetPropertyBlock(block);
-            block.SetColor("_Color", new Color(1f, 1f, 1f, alpha));
-            r.SetPropertyBlock(block);
+            r.GetPropertyBlock(_propBlock);
+            _propBlock.SetColor("_Color", new Color(1f, 1f, 1f, alpha));
+            r.SetPropertyBlock(_propBlock);
         }
     }
 }

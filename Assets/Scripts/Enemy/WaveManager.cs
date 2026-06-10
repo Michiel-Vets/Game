@@ -14,9 +14,9 @@ public class WaveManager : MonoBehaviour
     public static WaveManager Instance { get; private set; }
 
     [Header("Wave Timing")]
-    [SerializeField] private float baseWaveDuration = 60f;
-    [SerializeField] private float waveDurationPerEnemy = 4f;
-    [SerializeField] private float maxWaveDuration = 240f;
+    [SerializeField] private float baseWaveDuration = 30f;
+    [SerializeField] private float waveDurationPerEnemy = 2f;
+    [SerializeField] private float maxWaveDuration = 70f;
     [SerializeField] private float initialBreakDuration = 20f;   // Rust voor wave 1
     [SerializeField] private float firstBreakDuration = 60f;     // Break na wave 1
     [SerializeField] private float breakDuration = 150f;         // Overige breaks
@@ -73,9 +73,9 @@ public class WaveManager : MonoBehaviour
     [Tooltip("Max extra aggressie door kills (0–1).")]
     [SerializeField] private float maxKillAggressionBonus = 0.55f;
     [Tooltip("Max extra aggressie door voortgang binnen een wave (0–1).")]
-    [SerializeField] private float maxInWaveAggressionBonus = 0.45f;
+    [SerializeField] private float maxInWaveAggressionBonus = 1.2f;
     [Tooltip("Hoe snel de in-wave bonus oploopt; hogere waarde = sneller agressief.")]
-    [SerializeField] private float inWaveAggressionCurve = 1.8f;
+    [SerializeField] private float inWaveAggressionCurve = 1.2f;
 
     [Header("Wave Clear Penalty")]
     [Tooltip("Maximale extra moeilijkheidsboost als een wave helemaal niet gecleared wordt (0–1).")]
@@ -334,14 +334,12 @@ public class WaveManager : MonoBehaviour
         // Start de clear bar
         clearUI?.OnWaveStarted(CurrentWaveType == WaveType.Siege);
 
-        // Map laten groeien of krimpen afhankelijk van hoe de vorige wave verliep.
-        // _pendingPenalty loopt van 0 (gecleared) tot maxClearPenalty (volledig gemist).
-        float missedFraction = maxClearPenalty > 0f
-            ? _pendingPenalty / maxClearPenalty
-            : 0f;
+        // Map laten groeien als de vorige wave gecleared werd.
+        // Bij een mislukte wave is de krimp al toegepast in BeginBreak.
         float powerUpModifier = PowerUpSpawner.Instance != null ? PowerUpSpawner.Instance.PickupFraction : 1f;
         PowerUpSpawner.Instance?.OnWaveStarted();
-        MapController.Instance?.UpdateForWave(CurrentWave, missedFraction, powerUpModifier);
+        if (_pendingPenalty <= 0.01f)
+            MapController.Instance?.UpdateForWave(CurrentWave, 0f, powerUpModifier);
         pickupSpawner?.Reshuffle();
         if (powerUpModifier < 0.99f)
             progressUI?.ShowPowerUpFailText(powerUpModifier);
@@ -476,14 +474,20 @@ public class WaveManager : MonoBehaviour
 
         // ── Wave-clear penalty berekening ────────────────────────────────────
         bool exemptSiege = siegeWavesExemptFromPenalty && CurrentWaveType == WaveType.Siege;
-        if (!exemptSiege && _waveTotalSpawned > 0)
+        if (!exemptSiege && _totalWaveEnemies > 0 && _totalWaveEnemies < int.MaxValue)
         {
-            float clearFraction = Mathf.Clamp01((float)_waveKillCount / _waveTotalSpawned);
-            float missedFraction = 1f - clearFraction;
-            _pendingPenalty = missedFraction * maxClearPenalty * DifficultySettings.ClearPenaltyMultiplier;
+            // Straf gebaseerd op hoeveel enemies nog leven bij het einde van de wave.
+            float survivorFraction = Mathf.Clamp01((float)_waveSurvivorCount / _totalWaveEnemies);
+            _pendingPenalty = survivorFraction * maxClearPenalty * DifficultySettings.ClearPenaltyMultiplier;
 
             if (_pendingPenalty > 0.01f)
+            {
+                // Krimp de map direct zodra de wave mislukt is
+                float shrinkFraction = maxClearPenalty > 0f ? _pendingPenalty / maxClearPenalty : 0f;
+                MapController.Instance?.UpdateForWave(CurrentWave, shrinkFraction, 1f);
                 clearUI?.ShowPenalty(ClearPenaltyMult);
+                clearUI?.OnWaveEnded(); // zodat de kill bar verbergt na de penalty message
+            }
             else
                 clearUI?.OnWaveEnded();
         }

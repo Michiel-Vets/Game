@@ -70,7 +70,7 @@ public class GhostClothSetup : MonoBehaviour
     private Quaternion _movementTilt = Quaternion.identity;
     private Vector3 _dragForce;
 
-    void Start()
+    private void Start()
     {
         _rb = GetComponent<Rigidbody>();
 
@@ -90,7 +90,7 @@ public class GhostClothSetup : MonoBehaviour
         BuildRobe();
     }
 
-    void Update()
+    private void Update()
     {
         UpdateMovementDrag();
         UpdateClothSway();
@@ -183,7 +183,7 @@ public class GhostClothSetup : MonoBehaviour
         }
     }
 
-    void UpdateMovementDrag()
+    private void UpdateMovementDrag()
     {
         if (_rb == null) return;
 
@@ -212,7 +212,7 @@ public class GhostClothSetup : MonoBehaviour
         }
     }
 
-    void UpdateClothSway()
+    private void UpdateClothSway()
     {
         if (_cloth == null) return;
 
@@ -232,7 +232,7 @@ public class GhostClothSetup : MonoBehaviour
         _cloth.randomAcceleration = Vector3.one * randomTurbulence * scale;
     }
 
-    void UpdateHover()
+    private void UpdateHover()
     {
         float noiseY = Mathf.PerlinNoise(_hoverSeedY + Time.time * hoverSpeed, 0.5f);
         _hoverOffset = new Vector3(0f, (noiseY * 2f - 1f) * hoverAmplitude, 0f);
@@ -242,14 +242,14 @@ public class GhostClothSetup : MonoBehaviour
         _hoverRotation = Quaternion.Euler(tilt * 0.4f, 0f, tilt);
     }
 
-    void ApplyVisualTransform()
+    private void ApplyVisualTransform()
     {
         if (_visualRoot == null) return;
         _visualRoot.localPosition = _hoverOffset;
         _visualRoot.localRotation = _hoverRotation * _movementTilt;
     }
 
-    void EnforceBounds()
+    private void EnforceBounds()
     {
         if (_smr == null) return;
         _smr.updateWhenOffscreen = true;
@@ -261,13 +261,13 @@ public class GhostClothSetup : MonoBehaviour
         );
     }
 
-    void HideExistingRenderers()
+    private void HideExistingRenderers()
     {
         foreach (var r in GetComponentsInChildren<Renderer>())
             r.enabled = false;
     }
 
-    void BuildHead()
+    private void BuildHead()
     {
         var head = GameObject.CreatePrimitive(PrimitiveType.Sphere);
         head.name = "GhostHead";
@@ -279,7 +279,7 @@ public class GhostClothSetup : MonoBehaviour
             head.GetComponent<MeshRenderer>().sharedMaterial = ghostMaterial;
     }
 
-    void BuildRobe()
+    private void BuildRobe()
     {
         var robeGO = new GameObject("GhostRobe");
         robeGO.transform.SetParent(_visualRoot);
@@ -338,7 +338,7 @@ public class GhostClothSetup : MonoBehaviour
         );
     }
 
-    void SetupBodyColliders()
+    private void SetupBodyColliders()
     {
         var spheres = new SphereCollider[coneSegments + 1];
 
@@ -366,7 +366,7 @@ public class GhostClothSetup : MonoBehaviour
         _cloth.sphereColliders = pairs;
     }
 
-    Mesh BuildMesh()
+    private Mesh BuildMesh()
     {
         int vRows = rows + 1;
         var verts = new Vector3[columns * vRows];
@@ -436,7 +436,7 @@ public class GhostClothSetup : MonoBehaviour
         return mesh;
     }
 
-    void ApplyConstraints(Cloth cloth, Vector3[] verts)
+    private void ApplyConstraints(Cloth cloth, Vector3[] verts)
     {
         float totalHeight = robeHeight + hoodExtension;
         var coeff = new ClothSkinningCoefficient[verts.Length];
