@@ -13,7 +13,26 @@
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\MichielVets\\\\Documents\\\\GitHub\\\\Game\" -Recurse -Directory)",
       "Bash(Select-Object -First 20)",
       "Bash(Get-ChildItem \"C:\\\\Users\\\\MichielVets\\\\Documents\\\\GitHub\\\\Game\\\\Assets\\\\Scripts\" -Recurse -Directory)",
-      "Bash(Select-Object -ExpandProperty FullName)"
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(npm list *)",
+      "Bash(python3 -c \"import pptx; print\\('pptx ok'\\)\")",
+      "Bash(python -c \"import pptx; print\\('pptx ok'\\)\")",
+      "PowerShell(python --version)",
+      "PowerShell(python -c \"import pptx; print\\('pptx ok'\\)\")",
+      "Read(//c/Users/MichielVets/AppData/Roaming/Claude/local-agent-mode-sessions/skills-plugin/37eacd1e-929b-4099-a3d3-9e6baa298b8c/805881fa-e120-4630-b0fb-724a3cc8d876/skills/pptx/**)",
+      "Bash(python scripts/extract-text.py \"C:\\\\Users\\\\MichielVets\\\\Downloads\\\\GeestLamp_v5_2.pptx\")",
+      "Read(//c/Users/MichielVets/AppData/Roaming/Claude/local-agent-mode-sessions/skills-plugin/37eacd1e-929b-4099-a3d3-9e6baa298b8c/805881fa-e120-4630-b0fb-724a3cc8d876/skills/pdf/**)",
+      "Bash(python -c ' *)",
+      "PowerShell(python3 --version)",
+      "PowerShell(py --version)",
+      "PowerShell($skillDir = \"C:\\\\Users\\\\MichielVets\\\\AppData\\\\Roaming\\\\Claude\\\\local-agent-mode-sessions\\\\skills-plugin\\\\37eacd1e-929b-4099-a3d3-9e6baa298b8c\\\\805881fa-e120-4630-b0fb-724a3cc8d876\\\\skills\\\\pptx\"; py \"$skillDir\\\\scripts\\\\extract-text.py\" \"C:\\\\Users\\\\MichielVets\\\\Downloads\\\\GeestLamp_v5_2.pptx\" 2>&1)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\MichielVets\\\\Documents\\\\GitHub\\\\Game\" -Recurse -Filter \"*.cs\")",
+      "Bash(Sort-Object FullName)",
+      "Bash(python scripts/extract_text.py \"C:\\\\Users\\\\MichielVets\\\\Downloads\\\\GeestLamp_v5_2.pptx\")",
+      "Bash(python3 \"C:\\\\Users\\\\MichielVets\\\\AppData\\\\Roaming\\\\Claude\\\\local-agent-mode-sessions\\\\skills-plugin\\\\37eacd1e-929b-4099-a3d3-9e6baa298b8c\\\\805881fa-e120-4630-b0fb-724a3cc8d876\\\\skills\\\\pptx\\\\scripts\\\\extract_text.py\" \"C:\\\\Users\\\\MichielVets\\\\Downloads\\\\GeestLamp_v5_2.pptx\")",
+      "PowerShell(Get-Command py -ErrorAction SilentlyContinue)",
+      "PowerShell(Get-Command python3.exe -ErrorAction SilentlyContinue)",
+      "PowerShell($skillBase = \"C:\\\\Users\\\\MichielVets\\\\AppData\\\\Roaming\\\\Claude\\\\local-agent-mode-sessions\\\\skills-plugin\\\\37eacd1e-929b-4099-a3d3-9e6baa298b8c\\\\805881fa-e120-4630-b0fb-724a3cc8d876\\\\skills\\\\pptx\"; py \"$skillBase\\\\scripts\\\\extract_text.py\" \"C:\\\\Users\\\\MichielVets\\\\Downloads\\\\GeestLamp_v5_2.pptx\")"
     ]
   }
 }
