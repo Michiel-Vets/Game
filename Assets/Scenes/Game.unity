@@ -6800,6 +6800,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 46090c4c1bfc10842b4a82e5ca67a5cd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HealthController
+  maxHealth: 100
+  currentHealth: 0
+  healthBar: {fileID: 0}
+  fullWidth: 200
+  barHeight: 20
 --- !u!1 &1378751801
 GameObject:
   m_ObjectHideFlags: 0
@@ -7425,6 +7430,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 46090c4c1bfc10842b4a82e5ca67a5cd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HealthController
+  maxHealth: 100
+  currentHealth: 0
+  healthBar: {fileID: 0}
+  fullWidth: 200
+  barHeight: 20
 --- !u!114 &1444180903
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -8109,6 +8119,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 46090c4c1bfc10842b4a82e5ca67a5cd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HealthController
+  maxHealth: 100
+  currentHealth: 0
+  healthBar: {fileID: 0}
+  fullWidth: 200
+  barHeight: 20
 --- !u!114 &1748236546
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -8781,6 +8796,7 @@ MonoBehaviour:
   healthSpawnInterval: 10
   spawnRadius: 400
   minDistanceFromPlayer: 15
+  baseMapRadius: 60
   groundLayer:
     serializedVersion: 2
     m_Bits: 128
@@ -10861,7 +10877,6 @@ MonoBehaviour:
   minJumpVelocity: -0.1
   maxJumpVelocity: 0.5
   knockbackDecay: 8
-  healthChangePerSecond: 100
 --- !u!114 &8274528773792328047
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -130,11 +130,8 @@ public class MapController : MonoBehaviour
         }
         else
         {
-            float fullTarget = Mathf.Clamp(
-                startRadius + (waveNumber - 1) * radiusGrowthPerWave,
-                minRadius,
-                maxRadius);
-            _targetRadius = Mathf.Lerp(CurrentRadius, fullTarget, powerUpGrowthModifier);
+            // Groei altijd relatief aan huidige radius; power-up modifier schaalt de groei (0 = geen groei, 1 = volledige groei).
+            _targetRadius = Mathf.Clamp(CurrentRadius + radiusGrowthPerWave * powerUpGrowthModifier, minRadius, maxRadius);
         }
 
         GrowthRingOuterRadius = _targetRadius; // sla op na de update

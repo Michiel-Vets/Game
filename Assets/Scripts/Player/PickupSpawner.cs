@@ -22,6 +22,8 @@ public class PickupSpawner : MonoBehaviour
     [Header("Spawn Zone")]
     [SerializeField] private float spawnRadius = 20f;
     [SerializeField] private float minDistanceFromPlayer = 5f;
+    [Tooltip("Map-radius waarbij de basis max-pickups gelden. Schaal mee omhoog naarmate de kaart groeit.")]
+    [SerializeField] private float baseMapRadius = 100f;
 
     [Header("Ground Detection")]
     [SerializeField] private LayerMask groundLayer;
@@ -37,6 +39,10 @@ public class PickupSpawner : MonoBehaviour
     private float emergencyTimer;
     private bool difficultyApplied;
 
+    // Basis-maxima na difficulty-scaling; gebruikt voor radius-gebaseerde opschaling
+    private int _baseBatteryMax;
+    private int _baseHealthMax;
+
     private void Start()
     {
         PlayerFinder.TryAssignIfNull(ref player);
@@ -50,9 +56,20 @@ public class PickupSpawner : MonoBehaviour
         batterySpawnInterval *= DifficultySettings.PickupIntervalMultiplier;
         healthSpawnInterval *= DifficultySettings.PickupIntervalMultiplier;
 
+        _baseBatteryMax = maxBatteryPickups;
+        _baseHealthMax  = maxHealthPickups;
+
         batteryTimer = batterySpawnInterval;
         healthTimer = healthSpawnInterval;
         difficultyApplied = true;
+    }
+
+    private void UpdateRadiusScaledMax()
+    {
+        if (MapController.Instance == null || baseMapRadius <= 0f) return;
+        float ratio = MapController.Instance.CurrentRadius / baseMapRadius;
+        maxBatteryPickups = Mathf.Max(1, Mathf.RoundToInt(_baseBatteryMax * ratio));
+        maxHealthPickups  = Mathf.Max(1, Mathf.RoundToInt(_baseHealthMax  * ratio));
     }
 
     private void Update()
@@ -66,6 +83,7 @@ public class PickupSpawner : MonoBehaviour
         PlayerFinder.TryAssignIfNull(ref player);
         if (player == null) return;
 
+        UpdateRadiusScaledMax();
         CleanupDestroyed(activeBatteryPickups);
         CleanupDestroyed(activeHealthPickups);
 

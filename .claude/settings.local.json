@@ -45,7 +45,9 @@
       "Bash(awk '/^--- !u!1 &1748236543/,/m_Name:/{print}' Assets/Scenes/Game.unity)",
       "Bash(awk '/^--- !u!1 &3436731957858745123/,/m_Name:/{print}' Assets/Scenes/Game.unity)",
       "Bash(Remove-Item \"C:\\\\Users\\\\MichielVets\\\\Documents\\\\GitHub\\\\Game\\\\Assets\\\\Scripts\\\\Enemy\\\\PackLeaderManager.cs\" -Force)",
-      "Bash(Remove-Item \"C:\\\\Users\\\\MichielVets\\\\Documents\\\\GitHub\\\\Game\\\\Assets\\\\Scripts\\\\Enemy\\\\PackLeaderManager.cs.meta\" -Force -ErrorAction SilentlyContinue)"
+      "Bash(Remove-Item \"C:\\\\Users\\\\MichielVets\\\\Documents\\\\GitHub\\\\Game\\\\Assets\\\\Scripts\\\\Enemy\\\\PackLeaderManager.cs.meta\" -Force -ErrorAction SilentlyContinue)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\MichielVets\\\\Documents\\\\GitHub\\\\Game\" -Recurse -File)",
+      "Bash(Select-Object -Property FullName)"
     ]
   }
 }
