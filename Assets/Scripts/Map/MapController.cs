@@ -179,8 +179,8 @@ public class MapController : MonoBehaviour
         }
         else
         {
-            Debug.LogWarning("[MapController] fogMaterial is niet ingesteld! " +
-                             "Sleep VolumetricFogMat naar het Fog Material veld.", this);
+            Debug.LogWarning("[MapController] fogMaterial is not set! " +
+                             "Drag VolumetricFogMat to the Fog Material field.", this);
         }
     }
 

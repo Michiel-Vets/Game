@@ -12,8 +12,8 @@ public class PowerUpDropReward : BaseDropReward
             _powerUpPrefab = Resources.Load<GameObject>("Pickups/PowerUpPickup");
 
         if (_powerUpPrefab == null)
-            Debug.LogError("PowerUpDropReward: geen power-up prefab gevonden. " +
-                "Wijs 'Power Up Prefab' toe op PowerUpSpawner in de Inspector.");
+            Debug.LogError("PowerUpDropReward: no power-up prefab found. " +
+                "Assign 'Power Up Prefab' on PowerUpSpawner in the Inspector.");
     }
 
     protected override void SpawnReward()

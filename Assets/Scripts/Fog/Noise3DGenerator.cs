@@ -36,7 +36,7 @@ public class Noise3DGenerator : MonoBehaviour
 #if UNITY_EDITOR
         AssetDatabase.CreateAsset(tex, savePath);
         AssetDatabase.SaveAssets();
-        Debug.Log("3D Noise opgeslagen: " + savePath);
+        Debug.Log("3D Noise saved: " + savePath);
 #endif
     }
 

@@ -78,9 +78,9 @@ public class WaveProgressUI : MonoBehaviour
         {
             int s = Mathf.CeilToInt(secondsRemaining);
             if (isFirstWave)
-                breakCountdownText.text = s > 0 ? $"Spel begint in {s}s" : "Wave begint...";
+                breakCountdownText.text = s > 0 ? $"Game starts in {s}s" : "Wave starting...";
             else
-                breakCountdownText.text = s > 0 ? $"Volgende wave over {s}s" : "Wave begint...";
+                breakCountdownText.text = s > 0 ? $"Next wave in {s}s" : "Wave starting...";
         }
     }
 
@@ -116,8 +116,8 @@ public class WaveProgressUI : MonoBehaviour
     public void ShowPowerUpFailText(float growthModifier)
     {
         string msg = growthModifier < 0.01f
-            ? "Geen power-ups gepakt!\nDe map groeit niet."
-            : $"Slechts {Mathf.RoundToInt(growthModifier * 100f)}% power-ups gepakt!\nDe map groeit minder.";
+            ? "No power-ups collected!\nThe map won't grow."
+            : $"Only {Mathf.RoundToInt(growthModifier * 100f)}% power-ups collected!\nThe map grows less.";
 
         if (powerUpFailText != null) powerUpFailText.text = msg;
         SetActive(powerUpFailContainer, powerUpFailText, true);

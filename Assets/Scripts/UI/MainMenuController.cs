@@ -39,7 +39,7 @@ public class MainMenuController : MonoBehaviour
 
         if (fullscreenToggle == null)
         {
-            Debug.LogError("fullscreenToggle is NIET toegewezen in de Inspector!");
+            Debug.LogError("fullscreenToggle is NOT assigned in the Inspector!");
             return;
         }
 

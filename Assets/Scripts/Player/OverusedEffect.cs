@@ -63,7 +63,10 @@ public class OverusedEffect : MonoBehaviour
         var canvas = canvasGO.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         canvas.sortingOrder = 99;
-        canvasGO.AddComponent<CanvasScaler>();
+        var scaler = canvasGO.AddComponent<CanvasScaler>();
+        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        scaler.referenceResolution = new Vector2(1920, 1080);
+        scaler.matchWidthOrHeight = 0.5f;
         canvasGO.AddComponent<GraphicRaycaster>();
 
         var imgGO = new GameObject("FireOverlay");

@@ -24,9 +24,6 @@ public class PlayerController : MonoBehaviour
     [Header("Knockback")]
     [SerializeField] private float knockbackDecay = 8f;
 
-    [Header("Debug Health Input")]
-    [SerializeField] private float healthChangePerSecond = 25f;
-
     private Rigidbody rb;
 
     private Vector2 moveInput;
@@ -73,7 +70,6 @@ public class PlayerController : MonoBehaviour
         HandleSprintKeyboardFallback();
         HandleJumpKeyboardFallback();
         HandleFlashlightKeyboardFallback();
-        HandleDebugHealthInput();
         UpdateStamina();
     }
 
@@ -218,20 +214,6 @@ public class PlayerController : MonoBehaviour
     {
         if (Keyboard.current != null && Keyboard.current.fKey.wasPressedThisFrame && flashlightController != null)
             flashlightController.CycleMode();
-    }
-
-    private void HandleDebugHealthInput()
-    {
-        if (healthController == null || !healthController.IsAlive || Keyboard.current == null)
-            return;
-
-        float delta = healthChangePerSecond * Time.deltaTime;
-
-        if (Keyboard.current.qKey.isPressed)
-            healthController.TakeDamage(delta);
-
-        if (Keyboard.current.eKey.isPressed)
-            healthController.Heal(delta);
     }
 
     /// <summary>
